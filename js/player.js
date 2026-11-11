@@ -18,6 +18,9 @@ const Cam = {
     const piv = new V3(P.pos.x, P.pos.y + crouchOff, P.pos.z);
     const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
     piv.x += rx * 0.45; piv.z += rz * 0.45;
+    // katse johtaa liikettä: kamera katsoo hieman kulkusuuntaan
+    this.leadX = damp(this.leadX || 0, clamp(P.vel.x * 0.07, -0.7, 0.7), 4, dt); this.leadZ = damp(this.leadZ || 0, clamp(P.vel.z * 0.07, -0.7, 0.7), 4, dt);
+    piv.x += this.leadX; piv.z += this.leadZ;
     let want = 5.0;
     if (P.state === 'climb') want = 5.8;
     else if (P.state === 'wallrun') want = 5.6;
@@ -35,6 +38,7 @@ const Cam = {
     cam.lookAt(piv.x, piv.y + 0.1, piv.z);
     let tr = 0;
     if (P.state === 'wallrun' && P.wr) tr = P.wr.side * -0.12;
+    if (P.state === 'ground' || P.state === 'air') { const lat = P.vel.x * Math.cos(this.yaw) - P.vel.z * Math.sin(this.yaw); tr += clamp(-lat * 0.006, -0.05, 0.05); }
     if (P.groundBox && P.groundBox.rope && P.state === 'ground') tr = Math.sin(performance.now() / 400) * 0.03;
     this.roll = damp(this.roll, tr, 6, dt);
     cam.rotateZ(this.roll);
@@ -42,6 +46,8 @@ const Cam = {
     if (P.state === 'ground' && P.sprint && Math.hypot(P.vel.x, P.vel.z) > 6) tf = 70;
     if (P.dive || P.freefall) tf = 78;
     if (P.state === 'wallrun') tf = 72;
+    if (P.state === 'air' && P.vel.y > 3) tf += 3;
+    if (P.vel.y < -14) tf += Math.min(10, (-P.vel.y - 14) * 0.4);
     this.fov = damp(this.fov, tf, 4, dt);
     if (Math.abs(cam.fov - this.fov) > 0.05) { cam.fov = this.fov; cam.updateProjectionMatrix(); }
   },
@@ -55,7 +61,12 @@ const Player = {
   cn: null, cbox: null, hang: false, boost: 0, jumpWall: null,
   mantle: null, wr: null, kill: null, hay: null, hideT: 0,
   hurtT: 0, regenT: 0, deadT: 0, vis: { off: 0 }, vaultT: 0, stepAcc: 0, dead: false, noise: 0,
-  rollT: 0, slideT: 0, slideDir: 0, runUp: 0, varJump: false,
+  rollT: 0, slideT: 0, slideDir: 0, runUp: 0, varJump: false, squash: 0, dustT: 0, climbSnd: 0,
+  surf() {
+    const b = this.groundBox; if (!b) return 'stone';
+    if (b.hay) return 'hay'; if (b.rope || b.oneWay) return 'wood'; if (b.ground) return 'stone';
+    return this.pos.y > 3 ? 'roof' : 'stone';
+  },
   rig: null,
 
   init(scene) {
@@ -176,7 +187,12 @@ const Player = {
     const hs = Math.hypot(this.vel.x, this.vel.z);
     if (this.onGround && hs > 0.8) {
       this.stepAcc += hs * dt;
-      if (this.stepAcc > (this.sprint ? 2.6 : 1.8)) { this.stepAcc = 0; if (!this.crouch) Sfx.step(); }
+      if (this.stepAcc > (this.sprint ? 2.6 : 1.8)) { this.stepAcc = 0; if (!this.crouch) Sfx.step(this.surf()); }
+      this.dustT -= dt;
+      if (this.dustT <= 0 && ((this.sprint && hs > 6.5) || this.slideT > 0) && !(this.groundBox && this.groundBox.rope)) {
+        this.dustT = this.slideT > 0 ? 0.04 : 0.11;
+        FX.dust(this.pos.x - Math.sin(this.face) * 0.3, this.pos.y, this.pos.z - Math.cos(this.face) * 0.3, this.groundBox && this.groundBox.hay ? [0.9, 0.78, 0.35] : null, this.slideT > 0 ? 0.5 : 0.35);
+      }
       this.noise = Math.max(this.noise, this.crouch ? 0 : (this.sprint ? 1 : 0.4));
     }
     // esteet: hyppy / kiipeäminen (vapaa juoksu = Shift)
@@ -204,6 +220,13 @@ const Player = {
     const gb = this.groundBox;
     const wasDive = this.dive || this.freefall;
     this.dive = false; this.freefall = false;
+    // tuntuma: pöly, puristus, kameran tärähdys
+    if (imp > 6) {
+      const hayHit = gb && gb.hay;
+      FX.ring(this.pos.x, this.pos.y, this.pos.z, Math.min(22, Math.floor(imp * 0.9)), 1.6 + imp * 0.14, hayHit ? [0.9, 0.78, 0.35] : [0.72, 0.66, 0.56], hayHit ? 0.6 : 0.5, 0.75);
+      if (hayHit) FX.burst(this.pos.x, this.pos.y + 0.6, this.pos.z, 26, 4 + imp * 0.1, [0.9, 0.78, 0.35], 0.3, 0.9, 6, 3, 0.4);
+      Game.shake = Math.max(Game.shake, clamp(imp / 110, 0.03, 0.22)); this.squash = clamp(imp / 60, 0.06, 0.32);
+    }
     this.state = 'ground'; this.coyoteT = 0.12;
     if (gb && gb.hay) {
       if (fallH > 5) {
@@ -344,6 +367,11 @@ const Player = {
     this.stepH = 0;
     moveEntity(this, dt);
     this.cs = Math.abs(lt) * 0.8 + Math.abs(up);
+    this.climbSnd -= dt;
+    if (this.cs > 0.3 && this.climbSnd <= 0) {
+      this.climbSnd = 0.36; Sfx.climb();
+      FX.dust(this.pos.x - n.x * 0.35, this.pos.y + 1.6, this.pos.z - n.z * 0.35, [0.78, 0.72, 0.62], 0.22);
+    }
     if (this.onGround && up < 0) { this.state = 'ground'; this.vel.set(0, 0, 0); return; }
     if (this.onGround && up >= 0 && this.pos.y <= 0.01) { this.state = 'ground'; return; }
     if (this.pos.y > maxFeet) this.pos.y = maxFeet;
@@ -420,6 +448,7 @@ const Player = {
     const pv = this.vel.clone();
     moveEntity(this, dt);
     if (this.onGround) { this.land(pv); return; }
+    if (Math.random() < 0.5) FX.dust(this.pos.x - w.nx * 0.3, this.pos.y + 0.3, this.pos.z - w.nz * 0.3, [0.78, 0.72, 0.62], 0.3);
     const hh = w.c.y1 - this.pos.y;
     if (hh < 2.4 && hh > 1.3) { const ny = w.c.y1 - 1.88; if (freeAt(this, this.pos.x, ny, this.pos.z, 1.8)) { this.pos.y = ny; this.attach({ c: w.c, nx: w.nx, nz: w.nz }, true); return; } }
     const wall = this.findWall({ x: w.nx, z: w.nz });
@@ -487,6 +516,8 @@ const Player = {
     }
     if (this.attackT > 0) {
       this.attackT -= dt;
+      const u = 1 - this.attackT / 0.38, sw = (u - 0.5) * 2.2 * (this.combo % 2 ? -1 : 1);
+      FX.emit(this.pos.x + Math.sin(this.face + sw) * 1.15, this.pos.y + 1.05 + (0.5 - u) * 0.6, this.pos.z + Math.cos(this.face + sw) * 1.15, 0, 0, 0, [0.95, 0.97, 1], 0.2, 0.18, 0, -0.4, 0.55);
       if (!this.hitDone && this.attackT < 0.24) {
         this.hitDone = true;
         let any = false;
@@ -549,6 +580,8 @@ const Player = {
     }
     rig.root.position.set(this.pos.x, this.pos.y + this.vis.off, this.pos.z);
     rig.root.rotation.y = this.face;
+    this.squash = damp(this.squash, 0, 9, dt);
+    rig.root.scale.set(1 + this.squash * 0.5, 1 - this.squash, 1 + this.squash * 0.5);
     poseRig(rig, m, dt);
     if (this.rollT > 0) rig.tilt.rotation.x = (1 - this.rollT / 0.55) * Math.PI * 2;
     else if (this.slideT > 0) rig.tilt.rotation.x = -0.55 * Math.min(1, this.slideT * 6);

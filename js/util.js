@@ -166,6 +166,12 @@ const Sfx = {
       this.windGain = this.ctx.createGain(); this.windGain.gain.value = 0.0;
       src.connect(f); f.connect(this.windGain); this.windGain.connect(this.ctx.destination);
       src.start();
+      this.windFilter = f;
+      // kaupungin humina
+      const s2 = this.ctx.createBufferSource(); s2.buffer = buf; s2.loop = true; s2.playbackRate.value = 0.6;
+      const f2 = this.ctx.createBiquadFilter(); f2.type = 'bandpass'; f2.frequency.value = 280; f2.Q.value = 0.5;
+      this.murGain = this.ctx.createGain(); this.murGain.gain.value = 0.0;
+      s2.connect(f2); f2.connect(this.murGain); this.murGain.connect(this.ctx.destination); s2.start(0, 0.3);
     } catch (e) { this.ctx = null; }
   },
   tone(f, dur, type = 'sine', vol = 0.15, slide = 0, delay = 0) {
@@ -186,7 +192,39 @@ const Sfx = {
     g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     s.connect(f); f.connect(g); g.connect(this.ctx.destination); s.start(t, Math.random()); s.stop(t + dur + 0.02);
   },
-  step() { this.noise(0.07, 0.10, 500); },
+  step(kind) {
+    if (kind === 'wood') { this.tone(110, 0.08, 'triangle', 0.07, -40); this.noise(0.05, 0.06, 400); }
+    else if (kind === 'roof') this.noise(0.06, 0.08, 800);
+    else if (kind === 'hay') this.noise(0.1, 0.07, 3000, 'highpass');
+    else this.noise(0.07, 0.10, 500);
+  },
+  climb() { this.noise(0.09, 0.07, 1500, 'bandpass'); },
+  whoosh(v) { this.noise(0.25, clamp(v / 60, 0.05, 0.25), 2500, 'bandpass'); },
+  musicOn: true, mus: null,
+  musicStart() {
+    if (!this.ctx || this.mus) return;
+    const c = this.ctx; this.mus = { nt: 2, kt: 0, bt: 25 };
+    const pf = c.createBiquadFilter(); pf.type = 'lowpass'; pf.frequency.value = 520;
+    this.padGain = c.createGain(); this.padGain.gain.value = 0.0; pf.connect(this.padGain); this.padGain.connect(c.destination);
+    [110, 164.81, 220, 277.18].forEach((f, i) => { const o = c.createOscillator(); o.type = i % 2 ? 'sawtooth' : 'triangle'; o.frequency.value = f * (1 + (i - 1.5) * 0.002); o.connect(pf); o.start(); });
+    const lfo = c.createOscillator(); lfo.frequency.value = 0.08; const lg = c.createGain(); lg.gain.value = 180; lfo.connect(lg); lg.connect(pf.frequency); lfo.start();
+    this.padFilter = pf;
+  },
+  musicTick(dt, tension) {
+    if (!this.ctx || !this.mus) return;
+    const m = this.mus, now = this.ctx.currentTime;
+    if (!this.musicOn) { this.padGain.gain.setTargetAtTime(0, now, 0.3); return; }
+    this.padGain.gain.setTargetAtTime(0.03 + tension * 0.035, now, 0.8);
+    m.nt -= dt;
+    if (m.nt <= 0) {
+      const sc = [220, 261.63, 293.66, 329.63, 392, 440, 523.25, 587.33], f = sc[Math.floor(Math.random() * sc.length)];
+      this.tone(f, 1.8, 'triangle', 0.03 + tension * 0.02); this.tone(f * 2, 1.2, 'sine', 0.012, 0, 0.01);
+      m.nt = (1.5 + Math.random() * 3) / (1 + tension * 1.6);
+    }
+    if (tension > 0.4) { m.kt -= dt; if (m.kt <= 0) { this.tone(70, 0.22, 'sine', 0.16, -40); m.kt = 0.55 - tension * 0.12; } }
+    m.bt -= dt;
+    if (m.bt <= 0) { [392, 784, 1176].forEach((f, i) => this.tone(f, 3.2, 'sine', 0.045 / (i + 1))); m.bt = 50 + Math.random() * 30; }
+  },
   jump() { this.tone(180, 0.12, 'triangle', 0.08, 120); },
   land(v) { this.noise(0.18, clamp(v / 30, 0.1, 0.5), 300); },
   hit() { this.noise(0.12, 0.3, 3000, 'bandpass'); this.tone(220, 0.1, 'square', 0.08, -120); },
@@ -198,5 +236,9 @@ const Sfx = {
   sync() { [262, 330, 392, 523].forEach((f, i) => this.tone(f, 1.4, 'sine', 0.09, 0, i * 0.12)); },
   hurt() { this.tone(140, 0.2, 'sawtooth', 0.12, -60); },
   bolt() { this.noise(0.1, 0.2, 1800, 'bandpass'); },
-  setWind(h) { if (this.windGain) this.windGain.gain.value = clamp(h / 45, 0, 1) * 0.25 + 0.01; },
+  setWind(h, spd) {
+    if (this.windGain) this.windGain.gain.value = clamp(h / 45, 0, 1) * 0.22 + clamp((spd || 0) / 40, 0, 1) * 0.25 + 0.01;
+    if (this.windFilter) this.windFilter.frequency.value = 400 + (spd || 0) * 25;
+    if (this.murGain) this.murGain.gain.value = clamp(1 - h / 35, 0, 1) * 0.05;
+  },
 };

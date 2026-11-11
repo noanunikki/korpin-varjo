@@ -39,7 +39,9 @@ const Guards = {
     this.bolts.push({ m, pos: from.clone(), vel: dir.multiplyScalar(38), t: 0 });
     Sfx.bolt();
   },
+  pathBudget: 1,
   update(dt) {
+    this.pathBudget = 1;
     for (const g of this.list) g.update(dt);
     // separaatio
     for (let i = 0; i < this.list.length; i++) for (let j = i + 1; j < this.list.length; j++) {
@@ -73,14 +75,15 @@ const Guards = {
 
 class Guard {
   constructor(sp, scene) {
-    this.type = sp.type || 'sword'; this.roof = !!sp.roof; this.isTarget = this.type === 'captain';
+    this.type = sp.type || 'sword'; this.roof = !!sp.roof; this.isTarget = this.type === 'captain' || !!sp.target;
+    this.targetName = sp.target || (this.type === 'captain' ? 'Kapteeni Aldric' : null);
     this.home = new V3(sp.x, sp.y || 0, sp.z); this.homeFace = sp.face !== undefined ? sp.face : rand(0, 6);
     this.pos = this.home.clone(); this.vel = new V3(); this.r = 0.32; this.h = 1.8;
     this.route = sp.route || null; this.ri = 0; this.wait = sp.wait || 2; this.waitT = 0; this.speedMul = sp.speed || 1;
-    this.rig = makeHumanoid(this.type === 'archer' ? 'archer' : (this.isTarget ? 'captain' : 'guard'));
+    this.rig = makeHumanoid(sp.style || (this.type === 'archer' ? 'archer' : (this.isTarget ? 'captain' : 'guard')));
     this.rig.alwaysSword = false;
     scene.add(this.rig.root);
-    this.maxHp = this.type === 'captain' ? 180 : (this.type === 'archer' ? 60 : 100);
+    this.maxHp = this.isTarget ? (sp.hp || 180) : (this.type === 'archer' ? 60 : 100);
     // kuvakkeet
     const sm = new THREE.SpriteMaterial({ map: Guards.icons.q, transparent: true });
     this.icon = new THREE.Sprite(sm); this.icon.scale.set(0.7, 0.7, 1); this.icon.visible = false; scene.add(this.icon);
@@ -92,7 +95,7 @@ class Guard {
     if (this.dead) { this.rig.root.visible = true; }
     this.hp = this.maxHp; this.pos.copy(this.home); this.vel.set(0, 0, 0); this.face = this.homeFace;
     this.state = 'patrol'; this.sus = 0; this.dead = false; this.deadT = 0; this.deadOff = 0; this.stateT = 0; this.loseT = 0; this.ri = 0; this.waitT = 0;
-    this.atkCd = 0; this.windup = 0; this.stagger = 0; this.aimT = 0; this.path = null; this.pathT = 0; this.pathFail = false;
+    this.atkCd = 0; this.windup = 0; this.stagger = 0; this.aimT = 0; this.path = null; this.pathT = Math.random() * 0.8; this.pathFail = false;
     this.lastSeen = new V3(); this.hasLast = false; this.corpseT = Math.random(); this.alertShown = false; this.searchPhase = 0;
     this.rig.cur = {}; this.rig.tilt.rotation.set(0, 0, 0); this.canSee = false;
     if (this.dead) Guards.corpses = Guards.corpses.filter(c => c !== this);
@@ -104,7 +107,8 @@ class Guard {
     this.dead = true; this.state = 'dead'; this.deadT = 0; this.icon.visible = false; this.mark.visible = false; this.windup = 0;
     this.discovered = false; Guards.corpses.push(this);
     Game.stats.kills++;
-    if (this.isTarget) Game.onTargetKilled();
+    FX.burst(this.pos.x, this.pos.y + 1, this.pos.z, 14, 2.2, [0.7, 0.64, 0.55], 0.4, 0.7, 2, 1, 1.2);
+    if (this.isTarget) Game.onTargetKilled(this, this.killWitnessed !== false);
   }
   assassinate(aerial) {
     // silmin nähden tapetut herättävät hälytyksen
@@ -113,17 +117,19 @@ class Guard {
       const dx = this.pos.x - o.pos.x, dz = this.pos.z - o.pos.z, d = Math.hypot(dx, dz);
       return d < 16 && Math.abs(angDiff(o.face, Math.atan2(dx, dz))) < 1.0 && los(o.pos.x, o.pos.y + 1.6, o.pos.z, this.pos.x, this.pos.y + 1.4, this.pos.z);
     });
-    Sfx.kill(); this.die(true);
+    Sfx.kill(); this.killWitnessed = hadWitness; Game.slowmo(0.45, 0.28); Game.hitStop = Math.max(Game.hitStop, 0.08);
+    this.die(true);
     if (hadWitness) { for (const o of Guards.list) if (!o.dead && o.state !== 'alert') { const d = Math.hypot(this.pos.x - o.pos.x, this.pos.z - o.pos.z); if (d < 16 && o.canWitness(this)) o.sus = Math.max(o.sus, 0.8); } }
-    Game.toast(this.isTarget ? 'Kohde eliminoitu' : (aerial ? 'Ilmasalamurha' : 'Hiljainen salamurha'), 'good');
+    if (!this.isTarget) Game.toast(aerial ? 'Ilmasalamurha' : 'Hiljainen salamurha', 'good');
   }
   canWitness(g) { return los(this.pos.x, this.pos.y + 1.6, this.pos.z, g.pos.x, g.pos.y + 1.4, g.pos.z); }
 
   hurt(dmg, src) {
     if (this.dead) return;
     this.hp -= dmg; this.stagger = 0.5; this.windup = 0; Sfx.hit();
+    FX.sparks(this.pos.x, this.pos.y + 1.2, this.pos.z, 9); Game.hitStop = Math.max(Game.hitStop, dmg > 60 ? 0.11 : 0.06);
     this.vel.x = (this.pos.x - src.x) * 3; this.vel.z = (this.pos.z - src.z) * 3;
-    if (this.hp <= 0) { this.die(false); Game.toast(this.isTarget ? 'Kohde eliminoitu' : 'Vartija kaatui', 'good'); return; }
+    if (this.hp <= 0) { this.killWitnessed = true; this.die(false); if (!this.isTarget) Game.toast('Vartija kaatui', 'good'); Game.slowmo(0.35, 0.3); Game.hitStop = Math.max(Game.hitStop, 0.14); return; }
     if (this.state !== 'alert') this.forceAlert(src, true);
   }
   forceAlert(pos, shout) {
@@ -184,7 +190,8 @@ class Guard {
     let gx = tx, gz = tz;
     if (!this.roof && dd > 3) {
       this.pathT -= dt;
-      if (this.pathT <= 0 || !this.pathGoal || Math.hypot(this.pathGoal[0] - tx, this.pathGoal[1] - tz) > 3) {
+      if ((this.pathT <= 0 || !this.pathGoal || Math.hypot(this.pathGoal[0] - tx, this.pathGoal[1] - tz) > 3) && Guards.pathBudget > 0) {
+        Guards.pathBudget--;
         this.path = Nav.find(this.pos.x, this.pos.z, tx, tz); this.pathT = 0.8; this.pathGoal = [tx, tz]; this.pathFail = !this.path;
       }
       if (this.path && this.path.length) {
@@ -286,7 +293,7 @@ class Guard {
         this.windup = 0; this.atkCd = this.isTarget ? 0.9 : 1.3;
         if (dp < 2.5) {
           const blocked = P.blocking && Math.abs(angDiff(P.face, Math.atan2(this.pos.x - P.pos.x, this.pos.z - P.pos.z))) < 1.3;
-          if (blocked) { this.stagger = 1.1; Sfx.clang(); Game.toast('Torjunta! Isku nyt', 'good'); P.takeDamage(0, this.pos); }
+          if (blocked) { this.stagger = 1.1; Sfx.clang(); FX.sparks(P.pos.x + Math.sin(P.face) * 0.8, P.pos.y + 1.2, P.pos.z + Math.cos(P.face) * 0.8, 14); Game.hitStop = Math.max(Game.hitStop, 0.1); Game.shake = 0.12; Game.toast('Torjunta! Isku nyt', 'good'); P.takeDamage(0, this.pos); }
           else { P.takeDamage(this.isTarget ? 20 : 14, this.pos); Sfx.hit(); Game.shake = 0.2; }
         }
       }
@@ -304,7 +311,7 @@ class Guard {
       this.icon.position.set(this.pos.x, this.pos.y + 2.4, this.pos.z);
       const s = al ? 0.8 : 0.6 + this.sus * 0.3; this.icon.scale.set(s, s, 1);
     }
-    this.mark.visible = Game.eagle && !this.dead;
+    this.mark.visible = !this.dead && (Game.eagle || (this.isTarget && Game.currentTarget === this && Game.synced));
     if (this.mark.visible) { this.mark.position.set(this.pos.x, this.pos.y + 2.9, this.pos.z); this.mark.material.opacity = 1; }
   }
 

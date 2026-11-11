@@ -16,6 +16,9 @@ function makeHumanoid(style) {
     guard: { coat: 0x6b4a3a, pants: 0x3c3a3a, skin: 0xc09474, hood: 0x8c8f96, accent: 0xa02828, trim: 0x8d8d90, boots: 0x2a211b },
     archer: { coat: 0x4a5a40, pants: 0x3a3630, skin: 0xc09474, hood: 0x6a5a40, accent: 0x7a6a30, trim: 0x8d8d90, boots: 0x2a211b },
     captain: { coat: 0x5a1f28, pants: 0x2f2d2d, skin: 0xc09474, hood: 0xa9a9b2, accent: 0xd0a63a, trim: 0xd0a63a, boots: 0x201a16 },
+    noble: { coat: 0x4a2c5a, pants: 0x2a2630, skin: 0xc09474, hood: 0xb08a3a, accent: 0xd0a63a, trim: 0xd0a63a, boots: 0x201a16 },
+    bishop: { coat: 0xe6e0d0, pants: 0xb8b0a0, skin: 0xc09474, hood: 0xd0a63a, accent: 0x8c2e2e, trim: 0xd0a63a, boots: 0x6a5a40 },
+    marshal: { coat: 0x2a2e36, pants: 0x1c1e24, skin: 0xc09474, hood: 0x7a7f88, accent: 0x8c2e2e, trim: 0xb4b8c0, boots: 0x15171b },
   }[style];
   const root = new THREE.Group();
   const tilt = new THREE.Group(); tilt.position.y = 0.9; root.add(tilt);
@@ -36,7 +39,7 @@ function makeHumanoid(style) {
     const hd = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), mat(S.skin)); hd.position.set(0, 0.13, 0); hd.castShadow = true; head.add(hd);
     const helm = new THREE.Mesh(new THREE.SphereGeometry(0.155, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), mat(S.hood)); helm.position.set(0, 0.15, 0); helm.castShadow = true; head.add(helm);
     bx(head, 0.34, 0.025, 0.34, S.hood, 0, 0.16, 0, false);
-    if (style === 'captain') { bx(head, 0.03, 0.2, 0.2, 0xb03030, 0, 0.3, -0.02, false); }
+    if (style === 'captain' || style === 'marshal') { bx(head, 0.03, 0.2, 0.2, 0xb03030, 0, 0.3, -0.02, false); }
   }
   // kädet
   const mkArm = (sx) => {

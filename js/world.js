@@ -154,7 +154,7 @@ const Nav = {
   cs: 1.5, n: 144, ox: -108, oz: -108, blocked: null,
   build() {
     const n = this.n; this.blocked = new Uint8Array(n * n);
-    this.gs = new Float32Array(n * n); this.came = new Int32Array(n * n); this.seen = new Uint32Array(n * n); this.stamp = 0;
+    this.gs = new Float32Array(n * n); this.came = new Int32Array(n * n); this.seen = new Uint32Array(n * n); this.closed = new Uint32Array(n * n); this.stamp = 0;
     for (const c of World.colliders) {
       if (c.oneWay || c.y0 > 1.0 || c.y1 < 0.6 || c.noNav) continue;
       const i0 = Math.floor((c.x0 - 0.45 - this.ox) / this.cs), i1 = Math.floor((c.x1 + 0.45 - this.ox) / this.cs);
@@ -190,24 +190,23 @@ const Nav = {
     const pop = () => { const top = hI[0]; const li = hI.pop(), lf = hF.pop(); if (hI.length) { hI[0] = li; hF[0] = lf; let k = 0; for (; ;) { let l = k * 2 + 1, r = l + 1, m = k; if (l < hI.length && hF[l] < hF[m]) m = l; if (r < hI.length && hF[r] < hF[m]) m = r; if (m === k) break; [hI[m], hI[k]] = [hI[k], hI[m]]; [hF[m], hF[k]] = [hF[k], hF[m]]; k = m; } } return top; };
     const start = sj * n + si, goal = tj * n + ti;
     this.gs[start] = 0; this.came[start] = -1; this.seen[start] = st; push(start, 0);
-    const closed = new Uint8Array(0); // ei käytetä
-    const done = new Set();
+    const closed = this.closed;
     const DX = [1, -1, 0, 0, 1, 1, -1, -1], DZ = [0, 0, 1, -1, 1, -1, 1, -1];
     let exp = 0, found = false;
     while (hI.length && exp < 7000) {
-      const cur = pop(); if (done.has(cur)) continue; done.add(cur); exp++;
+      const cur = pop(); if (closed[cur] === st) continue; closed[cur] = st; exp++;
       if (cur === goal) { found = true; break; }
       const ci = cur % n, cj = (cur / n) | 0;
       for (let k = 0; k < 8; k++) {
         const ni = ci + DX[k], nj = cj + DZ[k];
         if (!this.isFree(ni, nj)) continue;
         if (k >= 4 && (!this.isFree(ci + DX[k], cj) || !this.isFree(ci, cj + DZ[k]))) continue;
-        const nid = nj * n + ni; if (done.has(nid)) continue;
+        const nid = nj * n + ni; if (closed[nid] === st) continue;
         const g = this.gs[cur] + (k < 4 ? 1 : 1.414);
         if (this.seen[nid] !== st || g < this.gs[nid]) {
           this.seen[nid] = st; this.gs[nid] = g; this.came[nid] = cur;
           const hx = Math.abs(ni - ti), hz = Math.abs(nj - tj);
-          push(nid, g + (hx + hz) + (1.414 - 2) * Math.min(hx, hz));
+          push(nid, g + 1.5 * ((hx + hz) + (1.414 - 2) * Math.min(hx, hz)));
         }
       }
     }
