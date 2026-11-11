@@ -81,9 +81,16 @@ function makeHumanoid(style) {
     sword.visible = false;
   }
   // selkäsuoja (vain Korppi): käyrä selkälaukku
-  if (style === 'raven') { bx(body, 0.26, 0.3, 0.1, 0x5a4026, 0, 0.3, -0.19); }
+  let pads = null;
+  if (style === 'raven') {
+    bx(body, 0.26, 0.3, 0.1, 0x5a4026, 0, 0.3, -0.19);
+    pads = new THREE.Group(); body.add(pads);
+    bx(pads, 0.22, 0.1, 0.32, 0x6a6e76, 0.33, 0.68, 0); bx(pads, 0.22, 0.1, 0.32, 0x6a6e76, -0.33, 0.68, 0);
+    bx(pads, 0.5, 0.06, 0.3, 0x6a6e76, 0, 0.62, 0.0);
+    pads.visible = false;
+  }
   return {
-    root, tilt, inner, body, head, armL, armR, legL, legR, cape, sword, bow, torso, style,
+    root, tilt, inner, body, head, armL, armR, legL, legR, cape, sword, bow, torso, style, pads,
     cur: {}, phase: 0, climbPh: 0, t: 0,
     S,
   };
@@ -224,4 +231,18 @@ function makeCivilian() {
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 6), mat(0xc09474)); head.position.y = 1.5; head.castShadow = true; g.add(head);
   const hat = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.2, 7), mat(pick([0x5a3a2a, 0x3a3a4a, 0x7a2a2a]))); hat.position.y = 1.68; g.add(hat);
   return g;
+}
+
+// Aseen malli tyypin ja harvinaisuuden mukaan (rig.sword = ryhmä kädessä, terä osoittaa paikalliseen -y suuntaan)
+function setWeaponModel(rig, type, R) {
+  const g = rig.sword;
+  while (g.children.length) g.remove(g.children[0]);
+  if (!type) return;
+  const metal = new THREE.MeshLambertMaterial({ color: 0xcfd3d8, emissive: R ? R.emis : 0 });
+  const wood = mat(0x6a4a2a), gold = mat(0xb08a3a);
+  const add = (w, h, d, m, x, y, z) => { const me = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); me.position.set(x, y, z); g.add(me); return me; };
+  if (type === 'sword') { add(0.04, 0.12, 0.04, wood, 0, 0, 0); add(0.18, 0.025, 0.05, gold, 0, -0.07, 0); add(0.045, 0.8, 0.012, metal, 0, -0.48, 0); }
+  else if (type === 'axe') { add(0.04, 0.95, 0.04, wood, 0, -0.45, 0); add(0.035, 0.24, 0.32, metal, 0, -0.82, 0.15); add(0.035, 0.1, 0.12, metal, 0, -0.82, -0.12); }
+  else if (type === 'spear') { add(0.035, 1.9, 0.035, wood, 0, -0.6, 0); add(0.07, 0.3, 0.02, metal, 0, -1.7, 0); add(0.12, 0.03, 0.03, gold, 0, -1.52, 0); }
+  else if (type === 'dagger') { add(0.04, 0.1, 0.04, wood, 0, 0, 0); add(0.12, 0.02, 0.04, gold, 0, -0.06, 0); add(0.04, 0.3, 0.012, metal, 0, -0.22, 0); }
 }

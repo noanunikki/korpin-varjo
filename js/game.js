@@ -9,11 +9,12 @@ const Game = {
   checkpoint: new V3(0, 0, 112), checkpointFace: Math.PI, lastGround: new V3(0, 0, 112), lastGroundT: 0,
   shake: 0, hurtFlash: 0, invuln: false, lockTarget: null, wanted: false,
   featherCount: 0, hintT: 0, civs: [], objPos: new V3(), beam: null, currentTarget: null,
-  hitStop: 0, timeScale: 1, slowT: 0, slowScale: 1, tension: 0,
+  hitStop: 0, timeScale: 1, slowT: 0, slowScale: 1, tension: 0, menu: false,
   race: { rings: [], meshes: [], i: 0, t: 0, running: false, limit: 170, par: 120 },
 
-  toast(msg, kind) {
+  toast(msg, kind, color) {
     const el = document.createElement('div'); el.className = 'toast ' + (kind || ''); el.textContent = msg;
+    if (color) el.style.color = color;
     const box = document.getElementById('toasts'); box.appendChild(el);
     while (box.children.length > 3) box.removeChild(box.firstChild);
     setTimeout(() => { el.style.transition = 'opacity .6s'; el.style.opacity = 0; setTimeout(() => el.remove(), 650); }, 2800);
@@ -40,7 +41,7 @@ const Game = {
     this.updateBeam(true);
   },
   advance(silent) {
-    if (!silent) { Sfx.pickup(); this.toast('Tehtävä suoritettu', 'good'); }
+    if (!silent) { Sfx.pickup(); this.toast('Tehtävä suoritettu: +150 kokemusta, +100 hopeaa', 'good'); Loot.addXp(150); Loot.silver += 100; }
     if (this.lastGroundT > 0) { this.checkpoint.copy(this.lastGround); }
     this.clearRace();
     if (this.mi + 1 >= this.missions.length) { this.win(); return; }
@@ -131,7 +132,7 @@ const Game = {
       if (R.i === 0) { R.running = true; R.t = 0; this.toast(`Aika käynnissä: ${R.limit} s`, 'warn'); }
       R.i++;
       if (R.i >= R.rings.length) {
-        const t = R.t; this.stats.race = t;
+        const t = R.t; this.stats.race = t; Loot.addXp(100);
         this.toast(t < R.par ? `Nopea aika: ${t.toFixed(1)} s!` : `Kisa läpi: ${t.toFixed(1)} s`, 'good');
         this.advance(); return;
       }
@@ -162,7 +163,8 @@ const Game = {
       `<div class="stat">Aika: <b>${mm}:${ss}</b></div><div class="stat">Vartijat kaatuneet: <b>${this.stats.kills}</b></div>` +
       `<div class="stat">Havaituksi tulit: <b>${this.stats.detected}</b> kertaa</div><div class="stat">Uskon loikat: <b>${this.stats.leaps}</b></div>` +
       `<div class="stat">Katokisa: <b>${this.stats.race ? this.stats.race.toFixed(1) + ' s' : '–'}</b></div>` +
-      `<div class="stat">Korpin sulat: <b>${this.featherCount} / ${World.feathers.length}</b></div>`;
+      `<div class="stat">Korpin sulat: <b>${this.featherCount} / ${World.feathers.length}</b></div>` +
+      `<div class="stat">Arkut avattu: <b>${Loot.opened} / ${Loot.chests.length}</b></div><div class="stat">Taso: <b>${Loot.level}</b> · Voimataso: <b>${Loot.charPower()}</b></div>`;
     document.getElementById('end').style.display = 'flex';
   },
 };
@@ -228,6 +230,7 @@ function setupActors() {
   Player.init(scene);
   Guards.init(scene);
   Player.reset(new V3(0, 0, 112), Math.PI);
+  Loot.init(); Loot.spawnChests();
   const S = (o) => Guards.spawn(o);
   const T = Game.targets;
   // --- kohteet ---
@@ -314,6 +317,8 @@ function drawMinimap() {
   g.translate(100, 100); g.rotate(Cam.yaw);
   g.drawImage(MM.off, (-115 - P.pos.x) * S, (-115 - P.pos.z) * S);
   const toM = (x, z) => [(x - P.pos.x) * S, (z - P.pos.z) * S];
+  g.fillStyle = '#ffd54a';
+  for (const c of Loot.chests) if (!c.open && (Game.synced && Math.hypot(c.x - P.pos.x, c.z - P.pos.z) < 40)) { const [x, z] = toM(c.x, c.z); g.fillRect(x - 3, z - 2, 6, 4); }
   g.fillStyle = '#66e0ff';
   for (const f of World.feathers) if (!f.got) { const d = Math.hypot(f.x - P.pos.x, f.z - P.pos.z); if (d < 28 || Game.synced && d < 50) { const [x, z] = toM(f.x, f.z); g.fillRect(x - 2, z - 2, 4, 4); } }
   for (const gd of Guards.list) {
@@ -347,6 +352,9 @@ function setupInput() {
     if (e.repeat) return;
     Input.keys[e.code] = true; Input.pressed[e.code] = true;
     if (e.code === 'KeyH') document.getElementById('help').classList.toggle('show');
+    if ((e.code === 'Tab' || e.code === 'KeyI') && Game.started && !Game.paused) Inv.toggle();
+    else if (e.code === 'Escape' && Inv.open) Inv.close();
+    if (e.code === 'KeyR' && Game.started && !Game.paused && !Game.menu && Player.state !== 'dead') Loot.swapWeapon();
     if (e.code === 'KeyM') { Sfx.musicOn = !Sfx.musicOn; Game.toast(Sfx.musicOn ? 'Musiikki päällä' : 'Musiikki pois'); }
     if (e.code === 'KeyP' && Game.started && !Game.ended) Game.togglePause();
   });
@@ -366,8 +374,9 @@ function setupInput() {
   document.addEventListener('pointerlockchange', () => {
     Game.locked = document.pointerLockElement === canvas;
     if (Game.locked) Game.lockWorked = true;
-    else if (Game.lockWorked && Game.started && !Game.ended && !Game.paused) Game.setPause(true);
+    else if (Game.lockWorked && Game.started && !Game.ended && !Game.paused && !Game.menu) Game.setPause(true);
   });
+  Inv.init();
   document.getElementById('start').addEventListener('click', () => Game.start());
   document.getElementById('pause').addEventListener('click', () => Game.setPause(false));
 }
@@ -403,6 +412,7 @@ function interact() {
   if (P.tryAssassinate()) return;
   const per = P.nearPerch();
   if (per && !Game.syncedPerches[per.name]) { Game.sync(per); return; }
+  const ch = Loot.nearChest(P); if (ch && (P.state === 'ground' || P.state === 'climb')) { Loot.openChest(ch); return; }
   if (P.state === 'ground') { const h = hayNear(P); if (h) { P.enterHide(h); return; } }
 }
 
@@ -418,10 +428,11 @@ function computePrompt() {
       for (const g of Guards.list) {
         if (g.dead) continue;
         const dh = Math.hypot(g.pos.x - P.pos.x, g.pos.z - P.pos.z), dy = P.pos.y - g.pos.y;
-        if (air && dh < 2.4 && dy > 0.6 && dy < 10) { txt = g.isTarget ? '[E] Ilmasalamurha: kohde' : '[E] Ilmasalamurha'; break; }
-        if (!air && (P.state === 'ground' || P.state === 'climb') && dh < 2.4 && Math.abs(dy) < 1.5 && g.canAssassinate()) { txt = g.isTarget ? '[E] Eliminoi kohde' : '[E] Salamurha'; break; }
+        if (air && dh < P.stats.ass && dy > 0.6 && dy < 10) { txt = g.isTarget ? '[E] Ilmasalamurha: kohde' : '[E] Ilmasalamurha'; break; }
+        if (!air && (P.state === 'ground' || P.state === 'climb') && dh < P.stats.ass && Math.abs(dy) < 1.5 && g.canAssassinate()) { txt = g.isTarget ? '[E] Eliminoi kohde' : '[E] Salamurha'; break; }
       }
     }
+    if (!txt && (P.state === 'ground' || P.state === 'climb')) { const ch = Loot.nearChest(P); if (ch) txt = '[E] Avaa arkku'; }
     if (!txt && P.state === 'ground' && hayNear(P)) txt = '[E] Piiloudu heinäkasaan';
   }
   const el = document.getElementById('prompt');
@@ -465,6 +476,16 @@ function updateHUD(dt) {
   document.getElementById('eagle').style.opacity = Game.eagle ? 1 : 0;
   const spd = Math.hypot(P.vel.x, P.vel.y, P.vel.z);
   document.getElementById('speed').style.opacity = clamp((spd - 12) / 20, 0, 0.7);
+  // varusteet
+  const wp = Loot.find(Loot.equip.w1);
+  const gn = document.getElementById('gearname');
+  gn.textContent = wp ? `${Loot.icon(wp)} ${wp.name}${wp.upg ? ' +' + wp.upg : ''}` : '✊ Nyrkit'; gn.style.color = wp ? RAR[wp.rar].col : '#e9dfc9';
+  const w2 = Loot.find(Loot.equip.w2);
+  document.getElementById('gearsub').textContent = w2 ? `R: ${w2.name}` : '';
+  document.getElementById('lvlnum').textContent = Loot.level; document.getElementById('pownum').textContent = Loot.charPower();
+  document.getElementById('xpfill').style.width = (Loot.level >= 20 ? 100 : Loot.xp / Loot.need(Loot.level) * 100) + '%';
+  document.getElementById('silv').textContent = Loot.silver; document.getElementById('iron').textContent = Loot.iron;
+  document.getElementById('spbadge').style.display = Loot.sp > 0 ? 'block' : 'none';
   drawMinimap();
 }
 
@@ -481,6 +502,7 @@ Game.update = function (dt) {
   Player.update(dt);
   Guards.update(dt);
   FX.update(dt);
+  Loot.update(dt);
   // viimeisin turvallinen maapiste (tallennuspiste)
   this.lastGroundT -= dt;
   if (P.state === 'ground' && P.onGround && P.pos.y < 1.5 && !Guards.anyAlert() && this.lastGroundT <= 0) { this.lastGround.copy(P.pos); this.lastGroundT = 1.0; }
@@ -500,7 +522,7 @@ Game.update = function (dt) {
     const m = featherMeshes[i]; if (f.got) { m.visible = false; return; }
     m.rotation.y = t * 2 + i; m.position.y = f.y + Math.sin(t * 2 + i) * 0.15;
     if (Math.hypot(f.x - P.pos.x, f.z - P.pos.z) < 1.3 && Math.abs(f.y - (P.pos.y + 1)) < 1.6 && P.state !== 'dead' && P.state !== 'hidden') {
-      f.got = true; this.featherCount++; Sfx.pickup(); FX.burst(f.x, f.y, f.z, 22, 3.5, [0.4, 0.9, 1], 0.2, 0.8, 0, 1, 0.3);
+      f.got = true; this.featherCount++; Loot.addXp(20); Sfx.pickup(); FX.burst(f.x, f.y, f.z, 22, 3.5, [0.4, 0.9, 1], 0.2, 0.8, 0, 1, 0.3);
       this.toast(`Korpin sulka ${this.featherCount}/${World.feathers.length}`, 'good');
     }
   });
@@ -536,7 +558,7 @@ function frame() {
   requestAnimationFrame(frame);
   const rdt = Math.min(0.05, clock.getDelta());
   if (Game.slowT > 0) { Game.slowT -= rdt; Game.timeScale = Game.slowScale; } else Game.timeScale = damp(Game.timeScale, 1, 9, rdt);
-  if (Game.started && !Game.paused) {
+  if (Game.started && !Game.paused && !Game.menu) {
     if (Game.hitStop > 0) Game.hitStop -= rdt;
     else { try { Game.update(rdt * Game.timeScale); } catch (e) { showErr(e); } }
   } else if (!Game.started) {
@@ -558,6 +580,6 @@ try {
   setupWorld();
   setupActors();
   setupInput();
-  window.__game = { Game, Player, Guards, World, Cam, Nav, FX, scene, camera, Input };
+  window.__game = { Game, Player, Guards, World, Cam, Nav, FX, Loot, Inv, scene, camera, Input, renderer };
   frame();
 } catch (e) { showErr(e); }

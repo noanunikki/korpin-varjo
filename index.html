@@ -42,6 +42,46 @@
   .ctl { display:grid; grid-template-columns:auto auto; gap:6px 26px; margin:0 0 30px; font-size:14px; text-align:left; }
   .ctl b { color:var(--gold); font-weight:700; }
   .screen .note { margin-top:22px; font-size:12px; opacity:.5; max-width:560px; line-height:1.6; }
+  .toast.loot { font-size:20px; }
+  #lvlbox { position:absolute; left:236px; bottom:66px; font-size:12px; letter-spacing:2px; color:var(--paper); text-shadow:0 2px 6px #000; }
+  #lvlbox b { color:var(--gold); font-size:15px; }
+  #xpbar { position:absolute; left:236px; bottom:28px; width:220px; height:3px; background:rgba(0,0,0,.6); }
+  #xpbar i { display:block; height:100%; width:0; background:#4fd1c5; }
+  #gear { position:absolute; right:26px; bottom:26px; text-align:right; text-shadow:0 2px 6px #000; font-size:14px; line-height:1.5; }
+  #gear .wn { font-size:17px; } #gear .dim { opacity:.6; font-size:12px; letter-spacing:1px; }
+  #res { position:absolute; right:26px; top:50px; font-size:14px; color:var(--paper); text-shadow:0 2px 6px #000; text-align:right; }
+  #spbadge { position:absolute; right:26px; top:76px; font-size:13px; color:#ffd54a; text-shadow:0 2px 6px #000; display:none; }
+  .inv { background:rgba(6,7,10,.9); }
+  .invbox { width:min(1120px,95vw); height:min(700px,92vh); display:flex; flex-direction:column; border:1px solid rgba(217,178,90,.5); background:linear-gradient(180deg,#171a22,#0f1117); text-align:left; }
+  .invtabs { display:flex; gap:26px; padding:14px 24px; border-bottom:1px solid rgba(217,178,90,.3); letter-spacing:4px; font-size:15px; text-transform:uppercase; }
+  .invtabs span { cursor:pointer; opacity:.55; padding-bottom:4px; border-bottom:2px solid transparent; } .invtabs span.on { opacity:1; color:var(--gold); border-color:var(--gold); }
+  .invtabs .closebtn { margin-left:auto; letter-spacing:2px; font-size:12px; }
+  #invbody { flex:1; overflow:auto; padding:18px 24px; }
+  .gear { display:grid; grid-template-columns:270px 1fr 310px; gap:22px; height:100%; }
+  .col { min-width:0; } .lvl { font-size:22px; letter-spacing:3px; } .lvl b { color:var(--gold); }
+  .xpbar { height:5px; background:#000; margin:6px 0 2px; } .xpbar i { display:block; height:100%; background:#4fd1c5; } .xpt { font-size:11px; opacity:.7; } .pw { margin:10px 0; font-size:15px; } .pw b { color:#ffd54a; font-size:20px; }
+  .slots { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; }
+  .slot { border:1px solid #555; padding:6px 8px; min-height:74px; cursor:pointer; background:rgba(255,255,255,.03); } .slot.sel { background:rgba(217,178,90,.12); }
+  .slot .sl { font-size:10px; letter-spacing:2px; opacity:.6; text-transform:uppercase; } .slot .si { font-size:22px; } .slot .sn { font-size:12px; line-height:1.2; } .dim { opacity:.4; }
+  .rows > div { display:flex; justify-content:space-between; gap:10px; font-size:13px; padding:2px 0; border-bottom:1px dotted rgba(255,255,255,.08); }
+  .rows.st { font-size:12px; } .cur { display:flex; justify-content:space-between; margin-top:10px; font-size:13px; } .cur b { color:var(--gold); }
+  .gtitle { font-size:13px; letter-spacing:3px; text-transform:uppercase; margin-bottom:8px; opacity:.8; } .gtitle i { opacity:.6; }
+  .grid { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; }
+  .cell { aspect-ratio:1; border:1px solid #333; position:relative; display:flex; align-items:center; justify-content:center; cursor:pointer; background:rgba(255,255,255,.03); }
+  .cell.empty { cursor:default; opacity:.5; } .cell.sel { outline:2px solid #fff; } .cell:hover:not(.empty) { background:rgba(255,255,255,.1); }
+  .ci { font-size:28px; } .cp { position:absolute; right:4px; bottom:2px; font-size:10px; opacity:.8; }
+  .hintl { font-size:11px; opacity:.5; margin-top:10px; }
+  .icard { border:1px solid; padding:14px; background:rgba(255,255,255,.03); } .rar { font-size:11px; letter-spacing:2px; text-transform:uppercase; } .iname { font-size:20px; margin:6px 0; } .iname b { color:#ffd54a; }
+  .ipow { font-size:13px; margin-bottom:8px; } .ipow b { color:#ffd54a; } .ipow i { opacity:.7; }
+  .up { color:#7fe08a; font-size:11px; } .dn { color:#ff7a6a; font-size:11px; }
+  .perks { margin-top:10px; font-size:13px; line-height:1.6; color:#cfe8ff; } .perks b { color:#ffd54a; font-weight:500; }
+  .btns { display:flex; flex-wrap:wrap; gap:6px; margin-top:14px; } .empty { opacity:.5; padding:20px; }
+  .inv button { font-family:inherit; background:rgba(217,178,90,.12); border:1px solid var(--gold); color:var(--paper); padding:6px 10px; cursor:pointer; font-size:12px; letter-spacing:1px; }
+  .inv button:hover { background:rgba(217,178,90,.3); } .inv button.dis { opacity:.35; }
+  .sphead { font-size:18px; letter-spacing:3px; margin-bottom:14px; } .sphead b { color:#ffd54a; font-size:24px; } .sphead i { opacity:.6; font-size:13px; margin-left:12px; }
+  .sbr { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; } .sbt { font-size:15px; letter-spacing:4px; color:var(--gold); text-transform:uppercase; border-bottom:1px solid rgba(217,178,90,.4); padding-bottom:6px; margin-bottom:10px; }
+  .sk { border:1px solid #333; padding:10px 12px; margin-bottom:10px; background:rgba(255,255,255,.03); } .sk.has { border-color:rgba(217,178,90,.6); }
+  .skn { font-size:15px; } .skd { font-size:12px; opacity:.8; margin:4px 0 6px; line-height:1.4; } .pips { display:flex; gap:5px; margin-bottom:8px; } .pips b { width:14px; height:6px; background:#333; } .pips b.on { background:#ffd54a; }
   #end { display:none; } #pause { display:none; }
   .stat { font-size:17px; margin:4px 0; } .stat b { color:var(--gold); }
   #err { position:fixed; left:10px; top:10px; z-index:99; background:#400; color:#fcc; padding:8px 12px; font:12px monospace; display:none; max-width:90vw; white-space:pre-wrap; }
@@ -58,6 +98,10 @@
   <div id="toasts"></div>
   <canvas id="minimap" width="200" height="200"></canvas>
   <div id="hplabel">SYNKRONOINTI</div><div id="hp"><i id="hpbar"></i></div>
+  <div id="lvlbox">TASO <b id="lvlnum">1</b> · VOIMA <b id="pownum">0</b></div><div id="xpbar"><i id="xpfill"></i></div>
+  <div id="gear"><div class="wn" id="gearname"></div><div class="dim" id="gearsub"></div></div>
+  <div id="res">⛁ <span id="silv">0</span> · rauta <span id="iron">0</span></div>
+  <div id="spbadge">Taitopiste saatavilla (Tab)</div>
   <div id="prompt"></div>
   <div id="hint"></div>
   <div id="help">
@@ -70,7 +114,9 @@
     Pudotus: liiku laskeutuessa = rullaus (ei vahinkoa)<br>
     E – salamurha / synkronoi / piiloudu<br>
     Vasen hiiri – isku · Oikea hiiri (pidä) – torjunta<br>
-    Q (pidä) – Korpin katse · H – ohje · P – tauko
+    <b>Tab / I</b> – reppu, varusteet ja taidot · <b>R</b> – vaihda asetta<br>
+    E arkulla – avaa · pudotukset poimitaan kävelemällä niiden päälle<br>
+    Q (pidä) – Korpin katse · H – ohje · P – tauko · M – musiikki
   </div>
 </div>
 <div id="fade"></div>
@@ -90,6 +136,9 @@
   <div class="go" id="gobtn">KLIKKAA ALOITTAAKSESI</div>
   <div class="note">Kiipeä katedraalin kellotorniin, synkronoi kaupungin kartta, tapa kapteeni Aldric torilla ja pakene portin viereiseen piilopaikkaan. Heinäkärryt pehmentävät pudotuksen — uskon loikka!</div>
 </div>
+<div class="screen inv" id="inv" style="display:none">
+  <div class="invbox"><div class="invtabs"><span data-tab="gear">Varusteet</span><span data-tab="skills">Taidot</span><span class="closebtn">Sulje · Tab</span></div><div id="invbody"></div></div>
+</div>
 <div class="screen" id="pause"><h1 style="font-size:44px">TAUKO</h1><h2>KLIKKAA JATKAAKSESI</h2><div class="go" id="resumebtn">JATKA</div></div>
 <div class="screen" id="end">
   <h1 style="font-size:52px">TEHTÄVÄ SUORITETTU</h1><h2 id="endsub">KAPTEENI ALDRIC ON KUOLLUT</h2>
@@ -104,6 +153,8 @@
 <script src="js/player.js"></script>
 <script src="js/fx.js"></script>
 <script src="js/guards.js"></script>
+<script src="js/loot.js"></script>
+<script src="js/ui.js"></script>
 <script src="js/game.js"></script>
 </body>
 </html>

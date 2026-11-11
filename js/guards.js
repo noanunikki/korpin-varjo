@@ -106,7 +106,7 @@ class Guard {
     if (this.dead) return;
     this.dead = true; this.state = 'dead'; this.deadT = 0; this.icon.visible = false; this.mark.visible = false; this.windup = 0;
     this.discovered = false; Guards.corpses.push(this);
-    Game.stats.kills++;
+    Game.stats.kills++; Loot.onKill(this);
     FX.burst(this.pos.x, this.pos.y + 1, this.pos.z, 14, 2.2, [0.7, 0.64, 0.55], 0.4, 0.7, 2, 1, 1.2);
     if (this.isTarget) Game.onTargetKilled(this, this.killWitnessed !== false);
   }
@@ -124,9 +124,9 @@ class Guard {
   }
   canWitness(g) { return los(this.pos.x, this.pos.y + 1.6, this.pos.z, g.pos.x, g.pos.y + 1.4, g.pos.z); }
 
-  hurt(dmg, src) {
+  hurt(dmg, src, stagMul) {
     if (this.dead) return;
-    this.hp -= dmg; this.stagger = 0.5; this.windup = 0; Sfx.hit();
+    this.hp -= dmg; this.stagger = 0.5 * (stagMul || 1); this.windup = 0; Sfx.hit();
     FX.sparks(this.pos.x, this.pos.y + 1.2, this.pos.z, 9); Game.hitStop = Math.max(Game.hitStop, dmg > 60 ? 0.11 : 0.06);
     this.vel.x = (this.pos.x - src.x) * 3; this.vel.z = (this.pos.z - src.z) * 3;
     if (this.hp <= 0) { this.killWitnessed = true; this.die(false); if (!this.isTarget) Game.toast('Vartija kaatui', 'good'); Game.slowmo(0.35, 0.3); Game.hitStop = Math.max(Game.hitStop, 0.14); return; }
@@ -148,12 +148,13 @@ class Guard {
       const hs = Math.hypot(P.vel.x, P.vel.z);
       let range = 24 * (P.crouch ? 0.5 : (hs > 5 ? 1.15 : (hs > 0.5 ? 0.9 : 0.7)));
       if (this.type === 'archer') range *= 1.1;
+      range *= P.stats.sight;
       const ang = Math.abs(angDiff(this.face, Math.atan2(dx, dz)));
       const fov = this.state === 'alert' ? 2.2 : 1.0;
       if (dist < range && (ang < fov || dist < 2.5) && los(ex, ey, ez, px, py, pz)) {
         seen = true; this.canSee = true;
         const rate = 1.2 + (1 - dist / range) * 4.0;
-        this.sus = Math.min(1, this.sus + rate * dt * (P.crouch ? 0.75 : 1));
+        this.sus = Math.min(1, this.sus + rate * dt * (P.crouch ? 0.75 : 1) * P.stats.sight);
         this.lastSeen.copy(P.pos); this.hasLast = true;
         if (this.state !== 'alert') this.face += angDiff(this.face, Math.atan2(dx, dz)) * Math.min(1, 3 * dt);
       } else if (P.noise > 0.8 && dist < 7 && this.state !== 'alert') {
@@ -293,7 +294,7 @@ class Guard {
         this.windup = 0; this.atkCd = this.isTarget ? 0.9 : 1.3;
         if (dp < 2.5) {
           const blocked = P.blocking && Math.abs(angDiff(P.face, Math.atan2(this.pos.x - P.pos.x, this.pos.z - P.pos.z))) < 1.3;
-          if (blocked) { this.stagger = 1.1; Sfx.clang(); FX.sparks(P.pos.x + Math.sin(P.face) * 0.8, P.pos.y + 1.2, P.pos.z + Math.cos(P.face) * 0.8, 14); Game.hitStop = Math.max(Game.hitStop, 0.1); Game.shake = 0.12; Game.toast('Torjunta! Isku nyt', 'good'); P.takeDamage(0, this.pos); }
+          if (blocked) { this.stagger = 1.1 * P.stats.parry; Sfx.clang(); FX.sparks(P.pos.x + Math.sin(P.face) * 0.8, P.pos.y + 1.2, P.pos.z + Math.cos(P.face) * 0.8, 14); Game.hitStop = Math.max(Game.hitStop, 0.1); Game.shake = 0.12; Game.toast('Torjunta! Isku nyt', 'good'); P.takeDamage(0, this.pos); }
           else { P.takeDamage(this.isTarget ? 20 : 14, this.pos); Sfx.hit(); Game.shake = 0.2; }
         }
       }

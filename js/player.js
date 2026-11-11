@@ -61,7 +61,8 @@ const Player = {
   cn: null, cbox: null, hang: false, boost: 0, jumpWall: null,
   mantle: null, wr: null, kill: null, hay: null, hideT: 0,
   hurtT: 0, regenT: 0, deadT: 0, vis: { off: 0 }, vaultT: 0, stepAcc: 0, dead: false, noise: 0,
-  rollT: 0, slideT: 0, slideDir: 0, runUp: 0, varJump: false, squash: 0, dustT: 0, climbSnd: 0,
+  rollT: 0, slideT: 0, slideDir: 0, runUp: 0, varJump: false, squash: 0, dustT: 0, climbSnd: 0, atkDur: 0.38,
+  stats: { dmg: 40, dur: 0.38, reach: 2.6, arc: 1.2, crit: 0.05, stag: 1, def: 0, sight: 1, fall: 1, climb: 1, jump: 1, hp: 100, heal: 0, xp: 1, loot: 0, noise: 1, block: 0.1, parry: 1, ass: 2.4, finisher: 0 },
   surf() {
     const b = this.groundBox; if (!b) return 'stone';
     if (b.hay) return 'hay'; if (b.rope || b.oneWay) return 'wood'; if (b.ground) return 'stone';
@@ -162,7 +163,7 @@ const Player = {
       this.jumpBuf = 0; this.coyoteT = 0; jumped = true; this.slideT = 0;
       if (this.crouch && freeAt(this, this.pos.x, this.pos.y, this.pos.z, 1.8)) { this.crouch = false; this.h = 1.8; }
       this.varJump = true;
-      this.vel.y = JUMP; this.airSpeed = Math.max(4.4, Math.hypot(this.vel.x, this.vel.z) * 1.05);
+      this.vel.y = JUMP * this.stats.jump; this.airSpeed = Math.max(4.4, Math.hypot(this.vel.x, this.vel.z) * 1.05);
       if (this.sprint && this.runUp > 0.5) { this.vel.x *= 1.06; this.vel.z *= 1.06; }
       this.state = 'air'; this.fallPeak = this.pos.y; this.onGround = false; this.dive = false; Sfx.jump();
       const pz = this.nearPerch();
@@ -193,7 +194,7 @@ const Player = {
         this.dustT = this.slideT > 0 ? 0.04 : 0.11;
         FX.dust(this.pos.x - Math.sin(this.face) * 0.3, this.pos.y, this.pos.z - Math.cos(this.face) * 0.3, this.groundBox && this.groundBox.hay ? [0.9, 0.78, 0.35] : null, this.slideT > 0 ? 0.5 : 0.35);
       }
-      this.noise = Math.max(this.noise, this.crouch ? 0 : (this.sprint ? 1 : 0.4));
+      this.noise = Math.max(this.noise, (this.crouch ? 0 : (this.sprint ? 1 : 0.4)) * this.stats.noise);
     }
     // esteet: hyppy / kiipeäminen (vapaa juoksu = Shift)
     if (this.sprint && d.m > 0.3 && this.onGround) {
@@ -231,7 +232,7 @@ const Player = {
     if (gb && gb.hay) {
       if (fallH > 5) {
         Sfx.land(8);
-        if (fallH > 12) { Game.stats.leaps++; Game.toast('Uskon loikka onnistui!', 'good'); Sfx.pickup(); }
+        if (fallH > 12) { Game.stats.leaps++; Loot.addXp(40); Game.toast('Uskon loikka onnistui!', 'good'); Sfx.pickup(); }
         this.enterHide(gb); return;
       }
       Sfx.land(imp * 0.5); return;
@@ -245,9 +246,9 @@ const Player = {
       return;
     }
     if (fallH > 9) {
-      const dmg = (fallH - 9) * 9;
+      const dmg = (fallH - 9) * 9 * this.stats.fall;
       Sfx.land(imp);
-      if (fallH > 22) { this.takeDamage(999, null, true); return; }
+      if (fallH > 22 + (1 - this.stats.fall) * 10) { this.takeDamage(999, null, true); return; }
       this.takeDamage(dmg, null, true);
       this.vel.x *= 0.2; this.vel.z *= 0.2;
     } else if (imp > 6) { Sfx.land(imp); if (imp > 11) { this.vel.x *= 0.5; this.vel.z *= 0.5; } }
@@ -285,7 +286,7 @@ const Player = {
     this.stepH = 0;
     moveEntity(this, dt);
     if (this.onGround) { this.land(pv); return; }
-    if (this.jumpBuf > 0 && this.coyoteT > 0 && this.vel.y <= 1) { this.jumpBuf = 0; this.coyoteT = 0; this.vel.y = JUMP; Sfx.jump(); }
+    if (this.jumpBuf > 0 && this.coyoteT > 0 && this.vel.y <= 1) { this.jumpBuf = 0; this.coyoteT = 0; this.vel.y = JUMP * this.stats.jump; Sfx.jump(); }
     this.coyoteT = Math.max(0, this.coyoteT - dt);
     if ((this.sprint || K('Space')) && !this.dive) this.airWall(pv, d);
   },
@@ -349,7 +350,7 @@ const Player = {
     const c = this.cbox, maxFeet = c.y1 - 1.88;
     const atTop = this.pos.y >= maxFeet - 0.03;
     this.hang = atTop;
-    let us = up > 0 ? 3.8 : 3.0;
+    let us = (up > 0 ? 3.8 : 3.0) * this.stats.climb;
     if (this.boost > 0) { us = 7.5 * (this.boost / 0.5) + 3.8; this.boost -= dt; if (up <= 0) up = 1; }
     // loikat
     if (K('KeyC') || K('ControlLeft')) { this.state = 'air'; this.vel.set(n.x * 0.8, 0, n.z * 0.8); this.fallPeak = this.pos.y; return; }
@@ -480,9 +481,9 @@ const Player = {
       if (g.dead) continue;
       const dx = g.pos.x - this.pos.x, dz = g.pos.z - this.pos.z, dy = this.pos.y - g.pos.y;
       const dh = Math.hypot(dx, dz);
-      if (air) { if (dh < 2.4 && dy > 0.6 && dy < 10 && dh < bd) { best = g; bd = dh; } }
+      if (air) { if (dh < this.stats.ass && dy > 0.6 && dy < 10 && dh < bd) { best = g; bd = dh; } }
       else if (this.state === 'ground' || this.state === 'climb') {
-        if (dh < 2.4 && Math.abs(dy) < 1.5 && g.canAssassinate() && dh < bd) { best = g; bd = dh; }
+        if (dh < this.stats.ass && Math.abs(dy) < 1.5 && g.canAssassinate() && dh < bd) { best = g; bd = dh; }
       }
     }
     if (!best) return false;
@@ -509,25 +510,27 @@ const Player = {
   combat(dt) {
     this.blocking = Input.mr && this.state === 'ground' && !this.crouch;
     if (Input.mlp && this.attackCd <= 0 && this.state === 'ground' && !this.blocking) {
-      this.attackT = 0.38; this.attackCd = 0.46; this.hitDone = false; this.combo = (this.combo % 3) + 1; this.comboT = 1.2;
+      this.atkDur = this.stats.dur; this.attackT = this.atkDur; this.attackCd = this.atkDur + 0.08; this.hitDone = false; this.combo = (this.combo % 3) + 1; this.comboT = 1.2;
       let tg = Game.nearestEnemy(3.5);
       if (tg) { this.face = Math.atan2(tg.pos.x - this.pos.x, tg.pos.z - this.pos.z); this.vel.x = Math.sin(this.face) * 3; this.vel.z = Math.cos(this.face) * 3; }
       Sfx.swing();
     }
     if (this.attackT > 0) {
       this.attackT -= dt;
-      const u = 1 - this.attackT / 0.38, sw = (u - 0.5) * 2.2 * (this.combo % 2 ? -1 : 1);
+      const u = 1 - this.attackT / this.atkDur, sw = (u - 0.5) * 2.2 * (this.combo % 2 ? -1 : 1);
       FX.emit(this.pos.x + Math.sin(this.face + sw) * 1.15, this.pos.y + 1.05 + (0.5 - u) * 0.6, this.pos.z + Math.cos(this.face + sw) * 1.15, 0, 0, 0, [0.95, 0.97, 1], 0.2, 0.18, 0, -0.4, 0.55);
-      if (!this.hitDone && this.attackT < 0.24) {
+      if (!this.hitDone && this.attackT < this.atkDur * 0.63) {
         this.hitDone = true;
-        let any = false;
+        let any = false; const S = this.stats;
         for (const g of Guards.list) {
           if (g.dead) continue;
           const dx = g.pos.x - this.pos.x, dz = g.pos.z - this.pos.z, dh = Math.hypot(dx, dz);
-          if (dh > 2.6 || Math.abs(g.pos.y - this.pos.y) > 1.6) continue;
-          if (Math.abs(angDiff(this.face, Math.atan2(dx, dz))) > 1.2) continue;
-          const dmg = g.stagger > 0 ? 999 : (this.combo === 3 ? 70 : 40);
-          g.hurt(dmg, this.pos); any = true;
+          if (dh > S.reach + 0.2 || Math.abs(g.pos.y - this.pos.y) > 1.6) continue;
+          if (Math.abs(angDiff(this.face, Math.atan2(dx, dz))) > S.arc) continue;
+          let dmg = this.combo === 3 ? S.dmg * (1.7 + S.finisher) : S.dmg;
+          const crit = Math.random() < S.crit; if (crit) { dmg *= 1.75; FX.sparks(g.pos.x, g.pos.y + 1.4, g.pos.z, 10); }
+          if (g.stagger > 0) dmg = 999;
+          g.hurt(dmg, this.pos, S.stag); any = true;
         }
         if (any) { Sfx.hit(); Game.shake = 0.15; }
       }
@@ -538,8 +541,9 @@ const Player = {
     if (this.state === 'dead' || this.state === 'hidden' || Game.invuln) return;
     if (!ignoreBlock && this.blocking && from) {
       const a = Math.atan2(from.x - this.pos.x, from.z - this.pos.z);
-      if (Math.abs(angDiff(this.face, a)) < 1.3) { n *= 0.1; Sfx.clang(); }
+      if (Math.abs(angDiff(this.face, a)) < 1.3) { n *= this.stats.block; Sfx.clang(); }
     }
+    if (!ignoreBlock) n *= 100 / (100 + this.stats.def * 3);
     this.hp -= n; this.hurtT = 0.3; this.regenT = 6; Sfx.hurt(); Game.hurtFlash = 1;
     if (this.state === 'climb' && n > 12) { this.state = 'air'; this.vel.set(this.cn.x * 2, 0, this.cn.z * 2); this.fallPeak = this.pos.y; }
     if (this.hp <= 0) this.die();
@@ -564,7 +568,7 @@ const Player = {
     switch (this.state) {
       case 'ground':
         if (this.rollT > 0) m.mode = 'vault';
-        else if (this.attackT > 0) { m.mode = 'attack'; m.at = 1 - this.attackT / 0.38; m.combo = this.combo; }
+        else if (this.attackT > 0) { m.mode = 'attack'; m.at = 1 - this.attackT / this.atkDur; m.combo = this.combo; }
         else if (this.blocking) m.mode = 'block';
         else if (this.vaultT > 0) m.mode = 'vault';
         else if (this.groundBox && this.groundBox.rope) { m.mode = 'balance'; m.sp = clamp(hs / 3.4, 0, 1); }
