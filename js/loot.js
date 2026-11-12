@@ -255,30 +255,38 @@ const Loot = {
     _rng = mulberry32(4242);
     const probe = { r: 0.75, h: 1.0 };
     const list = [];
-    const add = (x, y, z, tier, id, force) => { list.push({ x, y, z, tier, id, force }); };
-    // aloitusarkku portin ulkopuolella (varma ase)
-    add(-5, 0, 106, 0, 'start', { type: 'axe', rar: 1 });
-    // kattoarkut: korkeimmat rakennukset
-    const bl = []; for (const k in World.blockB) for (const b of World.blockB[k]) if (!b.guardRoof && !b.tower && b.h >= 10) bl.push(b);
-    bl.sort((a, b) => b.h - a.h);
+    const add = (x, y, z, tier, id, force) => list.push({ x, y, z, tier, id, force });
+    // aloitusarkku matkan varrella (varma ase)
+    const S = MAPD.start; add(S.x - 6, groundH(S.x - 6, S.z + 4), S.z + 4, 0, 'start', { type: 'axe', rar: 1 });
+    // kattoarkut asutuksittain
+    const all = []; for (const k in World.blockB) for (const b of World.blockB[k]) if (!b.guardRoof && !b.tower && b.h >= 8) all.push(b);
     let roofN = 0;
-    for (const b of bl) {
-      if (roofN >= 8) break;
-      const cs = [[b.x0 + 1.3, b.z0 + 1.3], [b.x1 - 1.3, b.z0 + 1.3], [b.x0 + 1.3, b.z1 - 1.3], [b.x1 - 1.3, b.z1 - 1.3]];
-      for (const c of cs) if (freeAt(probe, c[0], b.h + 0.01, c[1], 1.0)) { add(c[0], b.h, c[1], roofN < 2 ? 2 : 1, 'roof' + roofN); roofN++; break; }
+    for (const [key, n] of [['city', 5], ['fort', 1], ['village', 2], ['farm', 1]]) {
+      const c = MAPD[key];
+      const near = all.filter(b => Math.hypot((b.x0 + b.x1) / 2 - c.x, (b.z0 + b.z1) / 2 - c.z) < 130).sort((a, b) => b.h - a.h);
+      let got = 0;
+      for (const b of near) {
+        if (got >= n) break;
+        const cs = [[b.x0 + 1.3, b.z0 + 1.3], [b.x1 - 1.3, b.z0 + 1.3], [b.x0 + 1.3, b.z1 - 1.3], [b.x1 - 1.3, b.z1 - 1.3]];
+        for (const q of cs) if (freeAt(probe, q[0], b.h + 0.01, q[1], 1.0)) { add(q[0], b.h, q[1], key === 'city' && got < 2 ? 2 : 1, 'roof' + roofN); roofN++; got++; break; }
+      }
     }
     // tornien huiput
-    for (const p of World.perches) add(p.cx - 1.5, p.yT, p.cz + (p.dir === 's' ? 1.0 : (p.dir === 'n' ? -1.0 : 0)) + (p.dir === 'w' ? 0 : 0), 2, 'top-' + p.name);
-    // katutason arkut
+    for (const p of World.perches) {
+      const dx = (p.dir === 's' || p.dir === 'n') ? -1.6 : 0, dz = (p.dir === 'e' || p.dir === 'w') ? -1.6 : 0;
+      add(p.cx + dx, p.yT, p.cz + dz, 2, 'top-' + p.name);
+    }
+    // erikoiskohteet (leiri, rauniot)
+    for (const c of GM.chestSpots) add(c.x, c.y, c.z, c.tier, c.id);
+    // erämaan arkut
     let n = 0, tries = 0;
-    while (n < 5 && tries++ < 400) {
-      const line = pick([-28, 28, 87, -87]), horiz = Math.random() < 0.5;
-      const t = (Math.random() * 2 - 1) * 75;
-      const x = horiz ? t : line + (Math.random() - .5) * 5, z = horiz ? line + (Math.random() - .5) * 5 : t;
-      if (Math.abs(x) < 24 && Math.abs(z) < 24) continue;
-      if (!freeAt(probe, x, 0, z, 1.0)) continue;
-      if (list.some(c => Math.hypot(c.x - x, c.z - z) < 14)) continue;
-      add(x, 0, z, 0, 'st' + n); n++;
+    while (n < 7 && tries++ < 600) {
+      const x = (Math.random() * 2 - 1) * 280, z = (Math.random() * 2 - 1) * 280;
+      if (Terrain.flatMask(x, z) > 0.35 || Terrain.slope(x, z) > 0.28) continue;
+      const h = Terrain.h(x, z); if (h < 0.3 || h > 30) continue;
+      if (!freeAt(probe, x, h, z, 1.0)) continue;
+      if (list.some(c => Math.hypot(c.x - x, c.z - z) < 45)) continue;
+      add(x, h, z, n < 2 ? 1 : 0, 'wild' + n); n++;
     }
     for (const c of list) this.buildChest(c);
   },

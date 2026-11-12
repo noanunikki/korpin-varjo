@@ -54,6 +54,7 @@ const Game = {
     else if (m.type === 'kill') { const t = this.targets[m.target]; x = t.pos.x; z = t.pos.z; }
     else if (m.type === 'race') { const r = this.race.rings[this.race.i]; if (r) { x = r.x; z = r.z; } else { x = this.objPos.x; z = this.objPos.z; } }
     else if (m.type === 'escape') { x = World.zones.safe.x; z = World.zones.safe.z; }
+    else if (m.type === 'goto') { x = m.x; z = m.z; }
     this.setBeam(x, z, m.color);
   },
   setObjective(t, d) { document.getElementById('objm').textContent = t; this.objd = d; document.getElementById('objd').textContent = d || ''; },
@@ -91,7 +92,7 @@ const Game = {
       for (const b of cands) {
         if (used.includes(b)) continue;
         const bx = (b.x0 + b.x1) / 2, bz = (b.z0 + b.z1) / 2, d = Math.hypot(bx - cx, bz - cz);
-        if (d < 14 || d > 48) continue;
+        if (d < 14 || d > (n === 0 ? 95 : 48)) continue;
         // pidä suunta: älä palaa edellisten renkaiden luo
         let pen = 0; for (const r of R.rings) pen += Math.max(0, 30 - Math.hypot(bx - r.x, bz - r.z));
         const s = Math.abs(d - 26) + pen;
@@ -213,8 +214,7 @@ function setupScene() {
 
 function setupWorld() {
   makeTextures();
-  genCity();
-  buildWorldMeshes(scene);
+  buildMap(scene);
   FX.init(scene);
   const gm = new THREE.MeshBasicMaterial({ color: 0x66e0ff }), geo = new THREE.OctahedronGeometry(0.25);
   World.feathers.forEach(f => {
@@ -229,84 +229,119 @@ function setupWorld() {
 function setupActors() {
   Player.init(scene);
   Guards.init(scene);
-  Player.reset(new V3(0, 0, 112), Math.PI);
+  const st = new V3(MAPD.start.x, groundH(MAPD.start.x, MAPD.start.z), MAPD.start.z);
+  Player.reset(st, Math.PI); Game.checkpoint.copy(st); Game.lastGround.copy(st);
   Loot.init(); Loot.spawnChests();
   const S = (o) => Guards.spawn(o);
-  const T = Game.targets;
+  const T = Game.targets, C = MAPD.city, F = MAPD.fort, V = MAPD.village, A = MAPD.farm, K = MAPD.camp;
+  const c = (o, x, z) => [x + o.x, z + o.z];
+  const rt = (o, pts) => pts.map(p => [p[0] + o.x, p[1] + o.z]);
   // --- kohteet ---
-  T.captain = S({ type: 'captain', x: 0, y: 0.9, z: -17.2, face: 0 });
-  const rs = World.spawns[1] || World.spawns[0];
-  if (rs) {
-    const cx = (rs.route[0][0] + rs.route[2][0]) / 2, cz = (rs.route[0][1] + rs.route[2][1]) / 2;
-    T.maren = S({ type: 'sword', style: 'noble', target: 'Verokuvernööri Maren', hp: 120, roof: true, x: cx, y: rs.y, z: cz, face: 0 });
-  } else T.maren = S({ type: 'sword', style: 'noble', target: 'Verokuvernööri Maren', hp: 120, x: -28, z: -60, face: 0 });
-  T.corvane = S({ type: 'sword', style: 'bishop', target: 'Piispa Corvane', hp: 140, x: 62, z: -26.5, face: 0 });
-  T.hesk = S({ type: 'sword', style: 'marshal', target: 'Sotamarsalkka Hesk', hp: 220, roof: true, x: 0, y: 17, z: -96.5, face: 0 });
-  // --- torin vartijat ---
-  S({ x: -3.5, z: -11.5, face: 0 }); S({ x: 3.5, z: -11.5, face: 0 });
-  S({ x: -12, z: -4, route: [[-12, -4], [12, -4], [12, 8], [-12, 8]], wait: 2 });
-  S({ x: 12, z: 8, route: [[12, 8], [-12, 8], [-12, -4], [12, -4]], wait: 2 });
-  S({ type: 'archer', x: 14, z: 12, face: 3.5 });
-  // --- kadut ---
-  S({ x: -28, z: -28, route: [[-28, -28], [28, -28], [28, 28], [-28, 28]], wait: 1.5 });
-  S({ x: 28, z: 28, route: [[28, 28], [-28, 28], [-28, -28], [28, -28]], wait: 1.5 });
-  S({ x: -60, z: 87, route: [[-60, 87], [60, 87]], wait: 3 });
-  S({ x: 60, z: -87, route: [[60, -87], [-60, -87]], wait: 3 });
-  S({ x: 28, z: -80, route: [[28, -80], [28, -36]], wait: 3 });
-  S({ x: -28, z: 36, route: [[-28, 36], [-28, 80]], wait: 3 });
-  S({ x: 34, z: -25, route: [[34, -25], [54, -25]], wait: 3 });
-  S({ type: 'archer', x: -31, z: -31, face: 0.8 });
-  S({ type: 'archer', x: 31, z: 25, face: 3.9 });
-  S({ x: 87, z: 40, route: [[87, 40], [87, -40]], wait: 3 });
-  S({ x: -87, z: -20, route: [[-87, -20], [-87, 50]], wait: 3 });
+  T.captain = S({ type: 'captain', x: C.x, y: 0.9, z: C.z - 17.2, face: 0 });
+  T.corvane = S({ type: 'sword', style: 'bishop', target: 'Piispa Corvane', hp: 140, x: C.x + 62, z: C.z - 26.5, face: 0 });
+  T.maren = S({ type: 'sword', style: 'noble', target: 'Verokuvernööri Maren', hp: 120, roof: true, x: GM.hall.x, y: GM.hall.h, z: GM.hall.z, face: 0 });
+  const kp = GM.fortKeep;
+  T.hesk = S({ type: 'sword', style: 'marshal', target: 'Sotamarsalkka Hesk', hp: 220, roof: true, x: kp.x - 2.0, y: kp.y, z: kp.z - 1.5, face: 0 });
+  // --- kaupungin torin vartijat ---
+  S({ x: C.x - 3.5, z: C.z - 11.5, face: 0 }); S({ x: C.x + 3.5, z: C.z - 11.5, face: 0 });
+  S({ x: C.x - 12, z: C.z - 4, route: rt(C, [[-12, -4], [12, -4], [12, 8], [-12, 8]]), wait: 2 });
+  S({ x: C.x + 12, z: C.z + 8, route: rt(C, [[12, 8], [-12, 8], [-12, -4], [12, -4]]), wait: 2 });
+  S({ type: 'archer', x: C.x + 14, z: C.z + 12, face: 3.5 });
+  // --- kaupungin kadut ---
+  S({ x: C.x - 28, z: C.z - 28, route: rt(C, [[-28, -28], [28, -28], [28, 28], [-28, 28]]), wait: 1.5 });
+  S({ x: C.x + 28, z: C.z + 28, route: rt(C, [[28, 28], [-28, 28], [-28, -28], [28, -28]]), wait: 1.5 });
+  S({ x: C.x - 60, z: C.z + 87, route: rt(C, [[-60, 87], [60, 87]]), wait: 3 });
+  S({ x: C.x + 60, z: C.z - 87, route: rt(C, [[60, -87], [-60, -87]]), wait: 3 });
+  S({ x: C.x + 28, z: C.z - 80, route: rt(C, [[28, -80], [28, -36]]), wait: 3 });
+  S({ x: C.x - 28, z: C.z + 36, route: rt(C, [[-28, 36], [-28, 80]]), wait: 3 });
+  S({ x: C.x + 34, z: C.z - 25, route: rt(C, [[34, -25], [54, -25]]), wait: 3 });
+  S({ type: 'archer', x: C.x - 31, z: C.z - 31, face: 0.8 }); S({ type: 'archer', x: C.x + 31, z: C.z + 25, face: 3.9 });
+  S({ x: C.x + 87, z: C.z + 40, route: rt(C, [[87, 40], [87, -40]]), wait: 3 });
+  S({ x: C.x - 87, z: C.z - 20, route: rt(C, [[-87, -20], [-87, 50]]), wait: 3 });
   // --- piispan henkivartijat ---
-  S({ x: 58, z: -26, face: 0.4 }); S({ x: 66, z: -26, face: -0.4 }); S({ x: 62, z: -23.5, face: Math.PI });
-  S({ type: 'archer', x: 70, z: -30, face: 3.6 });
-  // --- marsalkan vartio muurilla ---
-  S({ roof: true, x: -3, y: 17, z: -95, face: 0 }); S({ roof: true, x: 3, y: 17, z: -95, face: 0 });
-  S({ type: 'archer', roof: true, x: -14, y: 13, z: -98, face: 0 }); S({ type: 'archer', roof: true, x: 14, y: 13, z: -98, face: 0 });
+  S({ x: C.x + 58, z: C.z - 26, face: 0.4 }); S({ x: C.x + 66, z: C.z - 26, face: -0.4 }); S({ x: C.x + 62, z: C.z - 23.5, face: Math.PI });
+  S({ type: 'archer', x: C.x + 70, z: C.z - 30, face: 3.6 });
+  // --- linnoitus ---
+  S({ x: F.x - 30, z: F.z + 28, route: rt(F, [[-30, 28], [30, 28], [30, -8], [-30, -8]]), wait: 2 });
+  S({ x: F.x + 30, z: F.z - 8, route: rt(F, [[30, -8], [-30, -8], [-30, 28], [30, 28]]), wait: 2 });
+  S({ x: F.x - 6, z: F.z + 33, face: 0 }); S({ x: F.x + 6, z: F.z + 33, face: 0 });
+  S({ roof: true, x: kp.x + 2.0, y: kp.y, z: kp.z + 1.8, face: 0 });
+  S({ type: 'archer', roof: true, x: kp.x - 4.2, y: 30, z: kp.z, face: 0 }); S({ type: 'archer', roof: true, x: kp.x + 4.2, y: 30, z: kp.z, face: 0 });
+  S({ type: 'archer', roof: true, x: F.x - 20, y: 11, z: F.z - 34.5, face: 0 }); S({ type: 'archer', roof: true, x: F.x + 20, y: 11, z: F.z - 34.5, face: 0 });
+  S({ type: 'archer', roof: true, x: F.x - 36, y: 16, z: F.z + 32, face: 3.14 });
+  // --- kalastajakylä ---
+  S({ x: V.x - 45, z: V.z + 32, route: rt(V, [[-45, 32], [40, 32]]), wait: 3 });
+  S({ x: V.x - 40, z: V.z + 10, route: rt(V, [[-40, 10], [-10, 10], [-10, -20], [-40, -20]]), wait: 2 });
+  S({ x: V.x - 8, z: V.z - 32, face: 0 }); S({ x: V.x + 8, z: V.z - 32, face: 0 });
+  S({ roof: true, x: GM.hall.x - 7, y: GM.hall.h, z: GM.hall.z, face: 0 }); S({ roof: true, x: GM.hall.x + 7, y: GM.hall.h, z: GM.hall.z, face: 0 });
+  S({ type: 'archer', x: V.x + 30, z: V.z + 20, face: 0.6 });
+  // --- tuulimylly ---
+  S({ x: A.x - 18, z: A.z - 20, route: rt(A, [[-18, -20], [24, -20], [24, 26], [-18, 26]]), wait: 3 });
+  // --- tienvarsipartiot ---
+  S({ x: -80, z: 130, route: [[-80, 130], [-30, 70]], wait: 4 }); S({ x: 90, z: 60, route: [[90, 60], [140, 95]], wait: 4 }); S({ x: 30, z: -80, route: [[30, -80], [50, -120]], wait: 4 });
+  // --- rosvoleiri ---
+  for (const [x, z, f] of [[-6, -4, 0.5], [6, 4, 3.5], [-10, 12, 1.5], [14, -2, 2.5], [0, -14, 0], [-16, -14, 0.8]]) S({ x: K.x + x, z: K.z + z, face: f, style: 'archer' });
+  S({ type: 'archer', roof: true, x: K.x - 19.5, y: 9, z: K.z - 19.5, face: 0.8 });
+  S({ x: K.x + 4, z: K.z - 4, route: rt(K, [[4, -4], [-8, 14], [14, 14]]), wait: 2, style: 'archer' });
   for (const s of World.spawns) Guards.spawn(s);
 
   // siviilit
-  const lines = [];
-  for (const L of [-28, 28]) { lines.push([[L + rand2(-3, 3), -80], [L + rand2(-3, 3), 80]]); lines.push([[-80, L + rand2(-3, 3)], [80, L + rand2(-3, 3)]]); }
-  for (let i = 0; i < 16; i++) {
-    const l = lines[i % lines.length];
-    const c = { m: makeCivilian(), a: l[0], b: l[1], t: Math.random(), dir: Math.random() < .5 ? 1 : -1, speed: 1.0 + Math.random() * 0.6 };
-    c.len = Math.hypot(c.b[0] - c.a[0], c.b[1] - c.a[1]); scene.add(c.m); Game.civs.push(c);
+  const addCiv = (ax, az, bx, bz) => { const cv = { m: makeCivilian(), a: [ax, az], b: [bx, bz], t: Math.random(), dir: Math.random() < .5 ? 1 : -1, speed: 1.0 + Math.random() * 0.6 }; cv.len = Math.hypot(bx - ax, bz - az); scene.add(cv.m); Game.civs.push(cv); };
+  for (let i = 0; i < 12; i++) {
+    const L = (i % 2 ? 28 : -28) + rand2(-3, 3);
+    if (i % 4 < 2) addCiv(C.x + L, C.z - 80, C.x + L, C.z + 80); else addCiv(C.x - 80, C.z + L, C.x + 80, C.z + L);
   }
+  for (let i = 0; i < 6; i++) addCiv(V.x - 50 + i * 3, V.z - 20 + rand2(-4, 4), V.x + 40, V.z - 20 + rand2(-4, 8));
+  for (let i = 0; i < 3; i++) addCiv(A.x - 20, A.z + 28 + i * 2, A.x + 25, A.z + 28 + i * 2);
   for (const [x, z] of [[-6, 6], [5, 7], [-12, 2], [12, 3], [-4, 11], [4, -9], [-13, -11], [13, -11]]) {
-    const m = makeCivilian(); m.position.set(x, 0, z); m.rotation.y = Math.random() * 6; scene.add(m); Game.civs.push({ m, still: true });
+    const m = makeCivilian(); m.position.set(C.x + x, 0, C.z + z); m.rotation.y = Math.random() * 6; scene.add(m); Game.civs.push({ m, still: true });
   }
   // kampanja
   Game.missions = [
-    { type: 'sync', perch: 'katedraali', color: 0x4fd1c5, title: 'Kiipeä katedraalin torniin', desc: 'Seuraa sinistä valopylvästä. Pidä Shift pohjassa ja juokse seinää päin. Synkronoi huipulla (E).' },
+    { type: 'sync', perch: 'tuulimylly', color: 0x4fd1c5, title: 'Kiipeä tuulimyllyn huipulle', desc: 'Seuraa sinistä valopylvästä. Pidä Shift pohjassa ja juokse seinää päin. Synkronoi huipulla (E).' },
+    { type: 'goto', x: C.x, z: C.z + 114, r: 9, color: 0x4fd1c5, title: 'Matka Hallavuoren kaupunkiin', desc: 'Seuraa tietä lounaaseen. Kaupunki on kukkuloiden takana. Voit myös oikoa maastossa.' },
     { type: 'race', color: 0x4ff0ff, title: 'Katokisa: Korpin polku', desc: 'Harjoittele: lennä renkaiden läpi kattojen yli. Ensimmäinen rengas käynnistää kellon.' },
-    { type: 'kill', target: 'captain', color: 0xffcf3a, title: 'Salamurhaa kapteeni Aldric', desc: 'Hän puhuu torilla julistuslavalla. Hiivi, kiipeä katoille tai tule ylhäältä.' },
-    { type: 'sync', perch: 'kellotorni', color: 0x4fd1c5, title: 'Synkronoi länsilaidan kellotorni', desc: 'Kellotorni on kaupungin länsireunalla. Kiipeä ja loikkaa lankulta heinään.' },
-    { type: 'kill', target: 'maren', color: 0xffcf3a, title: 'Salamurhaa verokuvernööri Maren', desc: 'Hän tapaa salaa kattotasolla. Vartijat partioivat katolla: ilmasalamurha tai hiljainen lähestyminen.' },
+    { type: 'kill', target: 'captain', color: 0xffcf3a, title: 'Salamurhaa kapteeni Aldric', desc: 'Hän puhuu kaupungin torilla julistuslavalla. Hiivi, kiipeä katoille tai tule ylhäältä.' },
+    { type: 'sync', perch: 'kellotorni', color: 0x4fd1c5, title: 'Synkronoi kaupungin kellotorni', desc: 'Kellotorni on kaupungin länsilaidalla. Kiipeä ja loikkaa lankulta heinään.' },
     { type: 'kill', target: 'corvane', color: 0xffcf3a, title: 'Salamurhaa piispa Corvane', desc: 'Hän siunaa kansaa katedraalin edustalla. Henkivartijoita on neljä, yksi on jousiampuja.' },
-    { type: 'kill', target: 'hesk', color: 0xff8a3a, title: 'Salamurhaa sotamarsalkka Hesk', desc: 'Hän vartioi pohjoismuurin tornin huipulta. Jousiampujat muurilla. Kiipeä muuria pitkin.' },
-    { type: 'escape', color: 0x4fe08a, title: 'Pakene', desc: 'Pääse piilopaikalle portin vieressä ja hukkaa vartijat. Heinäkärryt auttavat.' },
+    { type: 'kill', target: 'maren', color: 0xffcf3a, title: 'Salamurhaa verokuvernööri Maren', desc: 'Hän tapaa salaa kalastajakylän pitkätalon katolla kaakossa. Matkaa on yli 300 metriä.' },
+    { type: 'kill', target: 'hesk', color: 0xff8a3a, title: 'Salamurhaa sotamarsalkka Hesk', desc: 'Hän vartioi Korpilinnan tornin huipulta pohjoisessa. Jousiampujat muureilla. Kiipeä torniin.' },
+    { type: 'escape', color: 0x4fe08a, title: 'Pakene tuulimyllylle', desc: 'Palaa maatilalle kartan keskelle ja hukkaa vartijat. Heinäkärryt auttavat.' },
   ];
   Game.startMission(0);
 }
 function rand2(a, b) { return a + Math.random() * (b - a); }
 
 // ---------- Minikartta ----------
-const MM = { S: 2, off: null };
+const MM = { S: 2, off: null, W: 660, X0: -330 };
 function buildMinimapBase() {
-  const S = MM.S, N = 230 * S;
+  const S = MM.S, W = MM.W, N = W * S;
+  // maasto 1 px/m, skaalataan
+  const lo = document.createElement('canvas'); lo.width = lo.height = W; const lg = lo.getContext('2d');
+  const img = lg.createImageData(W, W);
+  for (let j = 0; j < W; j++) for (let i = 0; i < W; i++) {
+    const x = MM.X0 + i + 0.5, z = MM.X0 + j + 0.5, h = Terrain.h(x, z), k = (j * W + i) * 4;
+    let r, g, b;
+    if (h < Terrain.water - 0.05) { r = 52; g = 92; b = 122; }
+    else {
+      const sl = Terrain.h(x + 2, z) - Terrain.h(x - 2, z), shade = clamp(1 + sl * 0.035, 0.7, 1.3);
+      const t = clamp(h / 45, 0, 1);
+      r = (58 + t * 90) * shade; g = (82 + t * 62) * shade; b = (50 + t * 70) * shade;
+    }
+    img.data[k] = r; img.data[k + 1] = g; img.data[k + 2] = b; img.data[k + 3] = 255;
+  }
+  lg.putImageData(img, 0, 0);
   const c = document.createElement('canvas'); c.width = c.height = N; const g = c.getContext('2d');
-  g.fillStyle = '#2a2f3a'; g.fillRect(0, 0, N, N);
-  g.fillStyle = '#33394a'; g.fillRect((-100 + 115) * S, (-100 + 115) * S, 200 * S, 200 * S);
+  g.imageSmoothingEnabled = true; g.drawImage(lo, 0, 0, N, N);
   const rects = World.mapRects.slice().sort((a, b) => a[4] - b[4]);
   for (const r of rects) {
-    const t = clamp(r[4] / 30, 0, 1), v = Math.floor(95 + t * 110);
+    const t = clamp(r[4] / 30, 0, 1), v = Math.floor(115 + t * 100);
     g.fillStyle = `rgb(${v},${v - 8},${v - 24})`;
-    g.fillRect((r[0] + 115) * S, (r[1] + 115) * S, (r[2] - r[0]) * S, (r[3] - r[1]) * S);
+    g.fillRect((r[0] - MM.X0) * S, (r[1] - MM.X0) * S, (r[2] - r[0]) * S, (r[3] - r[1]) * S);
   }
-  g.fillStyle = '#6d8f9e'; g.beginPath(); g.arc(115 * S, 115 * S, 2.2 * S, 0, 7); g.fill();
+  // tiet
+  g.strokeStyle = 'rgba(190,160,110,.7)'; g.lineWidth = 3 * S;
+  for (const rd of Terrain.roads) { g.beginPath(); rd.forEach((p, i) => { const x = (p[0] - MM.X0) * S, y = (p[1] - MM.X0) * S; i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke(); }
   MM.off = c;
 }
 function drawMinimap() {
@@ -315,7 +350,7 @@ function drawMinimap() {
   g.save(); g.beginPath(); g.arc(100, 100, 99, 0, 7); g.clip();
   g.fillStyle = '#1b1f28'; g.fillRect(0, 0, 200, 200);
   g.translate(100, 100); g.rotate(Cam.yaw);
-  g.drawImage(MM.off, (-115 - P.pos.x) * S, (-115 - P.pos.z) * S);
+  g.drawImage(MM.off, (MM.X0 - P.pos.x) * S, (MM.X0 - P.pos.z) * S);
   const toM = (x, z) => [(x - P.pos.x) * S, (z - P.pos.z) * S];
   g.fillStyle = '#ffd54a';
   for (const c of Loot.chests) if (!c.open && (Game.synced && Math.hypot(c.x - P.pos.x, c.z - P.pos.z) < 40)) { const [x, z] = toM(c.x, c.z); g.fillRect(x - 3, z - 2, 6, 4); }
@@ -344,6 +379,50 @@ function drawMinimap() {
   g.beginPath(); g.moveTo(0, -9); g.lineTo(6, 7); g.lineTo(0, 3); g.lineTo(-6, 7); g.closePath(); g.fill(); g.stroke(); g.restore();
 }
 
+// ---------- Koko kartta (N): pikamatka synkronoituihin torneihin ----------
+const FullMap = {
+  open: false, px: 720,
+  toggle() { this.open ? this.close() : this.show(); },
+  show() {
+    if (!Game.started || Game.ended || Player.state === 'dead') return;
+    this.open = true; Game.menu = true; Input.keys = {};
+    if (document.exitPointerLock) document.exitPointerLock();
+    document.getElementById('fullmap').style.display = 'flex'; this.render();
+  },
+  close() { this.open = false; Game.menu = false; document.getElementById('fullmap').style.display = 'none'; Game.tryLock(); },
+  w2c(x, z) { return [(x - MM.X0) / MM.W * this.px, (z - MM.X0) / MM.W * this.px]; },
+  render() {
+    const cv = document.getElementById('fmcanvas'); cv.width = cv.height = this.px; const g = cv.getContext('2d');
+    g.drawImage(MM.off, 0, 0, this.px, this.px);
+    g.font = '13px Cinzel, Georgia, serif'; g.textAlign = 'center';
+    const lab = (x, z, t, col) => { const [cx, cy] = this.w2c(x, z); g.fillStyle = 'rgba(0,0,0,.7)'; g.fillText(t, cx + 1, cy + 1); g.fillStyle = col || '#f0e6c8'; g.fillText(t, cx, cy); };
+    lab(MAPD.city.x, MAPD.city.z - 70, 'HALLAVUORI'); lab(MAPD.fort.x, MAPD.fort.z - 52, 'KORPILINNA'); lab(MAPD.village.x, MAPD.village.z + 66, 'KALASTAJAKYLÄ');
+    lab(MAPD.farm.x, MAPD.farm.z + 56, 'TUULIMYLLY'); lab(MAPD.camp.x, MAPD.camp.z + 42, 'ROSVOLEIRI', '#ff9a8a'); lab(MAPD.ruins.x, MAPD.ruins.z + 22, 'RAUNIOT', '#cfd6ff'); lab(222, 30, 'JÄRVI', '#bfe0ff');
+    this.pts = [];
+    for (const p of World.perches) {
+      const [cx, cy] = this.w2c(p.x, p.z), on = Game.syncedPerches[p.name];
+      g.save(); g.translate(cx, cy); g.rotate(Math.PI / 4); g.fillStyle = on ? '#4fd1c5' : '#555'; g.strokeStyle = '#000'; g.lineWidth = 2; g.fillRect(-7, -7, 14, 14); g.strokeRect(-7, -7, 14, 14); g.restore();
+      g.fillStyle = on ? '#bff' : '#999'; g.fillText(p.name, cx, cy - 12); this.pts.push({ cx, cy, p, on });
+    }
+    const [ox, oz] = this.w2c(Game.objPos.x, Game.objPos.z), mc = Game.mission ? '#' + Game.mission.color.toString(16).padStart(6, '0') : '#fff';
+    g.fillStyle = mc; g.strokeStyle = '#000'; g.lineWidth = 2; g.beginPath(); g.arc(ox, oz, 7, 0, 7); g.fill(); g.stroke();
+    const [px, pz] = this.w2c(Player.pos.x, Player.pos.z);
+    g.save(); g.translate(px, pz); g.rotate(-Player.face + Math.PI); g.fillStyle = '#fff'; g.strokeStyle = '#000'; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(0, -11); g.lineTo(8, 9); g.lineTo(0, 4); g.lineTo(-8, 9); g.closePath(); g.fill(); g.stroke(); g.restore();
+  },
+  click(e) {
+    const cv = document.getElementById('fmcanvas'), r = cv.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * this.px, y = (e.clientY - r.top) / r.height * this.px;
+    for (const q of this.pts || []) if (Math.hypot(q.cx - x, q.cy - y) < 16) {
+      if (!q.on) { Game.toast('Synkronoi torni ensin', 'warn'); return; }
+      if (Guards.anyAlert()) { Game.toast('Pikamatka ei onnistu hälytyksen aikana', 'warn'); return; }
+      const off = { s: [0, 12], n: [0, -12], e: [12, 0], w: [-12, 0] }[q.p.dir] || [0, 12];
+      const tx = q.p.cx + off[0], tz = q.p.cz + off[1];
+      this.close(); Player.reset(new V3(tx, groundH(tx, tz), tz), Math.PI); Game.checkpoint.set(tx, groundH(tx, tz), tz);
+      Game.toast(`Pikamatka: ${q.p.name}`, 'good'); Sfx.sync(); return;
+    }
+  },
+};
+
 // ---------- Syötteet ----------
 function setupInput() {
   const canvas = document.getElementById('c');
@@ -352,7 +431,9 @@ function setupInput() {
     if (e.repeat) return;
     Input.keys[e.code] = true; Input.pressed[e.code] = true;
     if (e.code === 'KeyH') document.getElementById('help').classList.toggle('show');
-    if ((e.code === 'Tab' || e.code === 'KeyI') && Game.started && !Game.paused) Inv.toggle();
+    if (e.code === 'KeyN' && Game.started && !Game.paused && !Inv.open) FullMap.toggle();
+    else if (e.code === 'Escape' && FullMap.open) FullMap.close();
+    if ((e.code === 'Tab' || e.code === 'KeyI') && Game.started && !Game.paused && !FullMap.open) Inv.toggle();
     else if (e.code === 'Escape' && Inv.open) Inv.close();
     if (e.code === 'KeyR' && Game.started && !Game.paused && !Game.menu && Player.state !== 'dead') Loot.swapWeapon();
     if (e.code === 'KeyM') { Sfx.musicOn = !Sfx.musicOn; Game.toast(Sfx.musicOn ? 'Musiikki päällä' : 'Musiikki pois'); }
@@ -377,6 +458,8 @@ function setupInput() {
     else if (Game.lockWorked && Game.started && !Game.ended && !Game.paused && !Game.menu) Game.setPause(true);
   });
   Inv.init();
+  document.getElementById('fmcanvas').addEventListener('click', (e) => FullMap.click(e));
+  document.getElementById('fmclose').addEventListener('click', () => FullMap.close());
   document.getElementById('start').addEventListener('click', () => Game.start());
   document.getElementById('pause').addEventListener('click', () => Game.setPause(false));
 }
@@ -530,6 +613,7 @@ Game.update = function (dt) {
   const m = this.mission;
   if (m) {
     if (m.type === 'race') this.updateRace(dt);
+    else if (m.type === 'goto') { if (Math.hypot(P.pos.x - m.x, P.pos.z - m.z) < m.r && P.state !== 'dead') this.advance(); }
     else if (m.type === 'kill') { const tg = this.targets[m.target]; if (tg && !tg.dead) { this.objPos.set(tg.pos.x, 0, tg.pos.z); this.beam.position.set(tg.pos.x, 80, tg.pos.z); } }
     else if (m.type === 'escape' && P.state !== 'dead') {
       const z = World.zones.safe, inZ = Math.hypot(P.pos.x - z.x, P.pos.z - z.z) < z.r && P.pos.y < 3;
@@ -537,6 +621,7 @@ Game.update = function (dt) {
       else this.escapeT = 0;
     }
   }
+  if (GM.blades) GM.blades.rotation.z += dt * 0.35;
   // kamera
   Cam.update(dt, P);
   if (this.shake > 0) { camera.position.x += (Math.random() - .5) * this.shake; camera.position.y += (Math.random() - .5) * this.shake; this.shake = Math.max(0, this.shake - dt); }
@@ -580,6 +665,6 @@ try {
   setupWorld();
   setupActors();
   setupInput();
-  window.__game = { Game, Player, Guards, World, Cam, Nav, FX, Loot, Inv, scene, camera, Input, renderer };
+  window.__game = { Game, Player, Guards, World, Cam, Nav, FX, Loot, Inv, FullMap, Terrain, GM, scene, camera, Input, renderer };
   frame();
 } catch (e) { showErr(e); }

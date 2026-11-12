@@ -12,6 +12,7 @@ Selaimessa pelattava keskiaikainen parkour- ja hiiviskelypeli (Three.js). Oma or
 | Välilyönti | hyppy (pidä = korkeampi), tartu reunaan ilmassa |
 | C | kyyristy · juostessa liuku · seinällä pudota |
 | M | musiikki päälle/pois |
+| N | koko kartta ja pikamatka synkronoituihin torneihin |
 | Tab / I | reppu, varusteet ja taidot |
 | R | vaihda pää- ja toista asetta |
 | E arkulla | avaa arkku (pudotukset poimitaan kävelemällä päälle) |
@@ -19,25 +20,35 @@ Selaimessa pelattava keskiaikainen parkour- ja hiiviskelypeli (Three.js). Oma or
 | Hiiri vasen / oikea | isku / torjunta |
 | Q (pidä) | Korpin katse |
 
-## Kampanja (8 tehtävää)
-1. Kiipeä katedraalin kellotorniin ja synkronoi kartta.
-2. Katokisa: lennä seitsemän renkaan läpi kattojen yli.
-3. Salamurhaa kapteeni Aldric torilla.
-4. Synkronoi länsilaidan kellotorni.
-5. Salamurhaa verokuvernööri Maren kattotasolla.
+## Kartta: Pohjanranta
+Iso avoin maailma (noin 600 × 600 m) maastoineen: kukkuloita, metsää, järvi, tiet ja vuoristoreunat.
+- **Tuulimylly** keskellä (aloitus), maatila ja piilopaikka
+- **Hallavuori** lounaassa: muurien ympäröimä kaupunki torilla, katedraalilla ja kellotornilla
+- **Kalastajakylä** kaakossa: hirsitaloja, laitureita, pitkätalo ja vartiotorni
+- **Korpilinna** pohjoisessa: linnoitus ja korkea torni
+- **Rosvoleiri** luoteessa ja **rauniot** kukkulalla koillisessa
+- Torneista voi synkronoida pisteen ja matkustaa sinne kartalta (N)
+
+## Kampanja (9 tehtävää)
+1. Kiipeä tuulimyllyn huipulle ja synkronoi kartta.
+2. Matka Hallavuoren kaupunkiin.
+3. Katokisa: lennä seitsemän renkaan läpi kattojen yli.
+4. Salamurhaa kapteeni Aldric torilla.
+5. Synkronoi kaupungin kellotorni.
 6. Salamurhaa piispa Corvane katedraalin edustalla.
-7. Salamurhaa sotamarsalkka Hesk pohjoismuurin tornin huipulla.
-8. Pakene portin viereiseen piilopaikkaan.
+7. Salamurhaa verokuvernööri Maren kalastajakylän pitkätalon katolla.
+8. Salamurhaa sotamarsalkka Hesk Korpilinnan tornin huipulla.
+9. Pakene takaisin tuulimyllylle.
 
 ## Varusteet ja eteneminen
 - **Harvinaisuudet:** tavallinen, hieno, harvinainen, eeppinen, legendaarinen — satunnaiset ominaisuudet (perkit) harvinaisuuden mukaan.
 - **Aseet:** miekka, kirves (raskas, horjuttaa), keihäs (pitkä ulottuvuus), tikari (nopea, kriittinen). Kaksi asetta, vaihto R:llä.
 - **Panssari ja talismaani:** puolustus, näkyvyys, kiipeämisnopeus, putoamisvahinko ym.
-- **Saalis:** 16 arkkua (katoilla, torneissa, kaduilla), vartijoiden pudotukset ja kohteiden legendaariset aseet.
+- **Saalis:** 24 arkkua (katoilla, torneissa, leirissä, raunioissa ja erämaassa), vartijoiden pudotukset ja kohteiden legendaariset aseet.
 - **Parantaminen ja myynti:** hopealla ja raudalla, jopa +5.
 - **Taso 1–20 ja taitopuu:** Korppi (parkour), Soturi (taistelu), Salamurhaaja (hiiviskely). 11 taitoa.
 
-Lisäksi 12 kerättävää Korpin sulkaa. Täysi synkronointi: älä jää kertaakaan kiinni.
+Lisäksi 14 kerättävää Korpin sulkaa (myös kukkuloiden huipuilla). Täysi synkronointi: älä jää kertaakaan kiinni.
 
 Heinäkärryt pehmentävät pudotuksen: kokeile uskon loikkaa tornin lankulta.
 

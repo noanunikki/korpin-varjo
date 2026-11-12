@@ -34,7 +34,7 @@ const Cam = {
     const cd = Math.max(0.6, Math.min(want, d - 0.4));
     if (cd < this.curDist) this.curDist = cd; else this.curDist = damp(this.curDist, cd, 3, dt);
     cam.position.set(piv.x + dir.x * this.curDist, piv.y + dir.y * this.curDist, piv.z + dir.z * this.curDist);
-    if (cam.position.y < 0.25) cam.position.y = 0.25;
+    const gcy = groundH(cam.position.x, cam.position.z) + 0.25; if (cam.position.y < gcy) cam.position.y = gcy;
     cam.lookAt(piv.x, piv.y + 0.1, piv.z);
     let tr = 0;
     if (P.state === 'wallrun' && P.wr) tr = P.wr.side * -0.12;
@@ -61,11 +61,11 @@ const Player = {
   cn: null, cbox: null, hang: false, boost: 0, jumpWall: null,
   mantle: null, wr: null, kill: null, hay: null, hideT: 0,
   hurtT: 0, regenT: 0, deadT: 0, vis: { off: 0 }, vaultT: 0, stepAcc: 0, dead: false, noise: 0,
-  rollT: 0, slideT: 0, slideDir: 0, runUp: 0, varJump: false, squash: 0, dustT: 0, climbSnd: 0, atkDur: 0.38,
+  wet: false, rollT: 0, slideT: 0, slideDir: 0, runUp: 0, varJump: false, squash: 0, dustT: 0, climbSnd: 0, atkDur: 0.38,
   stats: { dmg: 40, dur: 0.38, reach: 2.6, arc: 1.2, crit: 0.05, stag: 1, def: 0, sight: 1, fall: 1, climb: 1, jump: 1, hp: 100, heal: 0, xp: 1, loot: 0, noise: 1, block: 0.1, parry: 1, ass: 2.4, finisher: 0 },
   surf() {
     const b = this.groundBox; if (!b) return 'stone';
-    if (b.hay) return 'hay'; if (b.rope || b.oneWay) return 'wood'; if (b.ground) return 'stone';
+    if (b.hay) return 'hay'; if (b.rope || b.oneWay) return 'wood'; if (b.ground) return Terrain.kind(this.pos.x, this.pos.z);
     return this.pos.y > 3 ? 'roof' : 'stone';
   },
   rig: null,
@@ -149,6 +149,8 @@ const Player = {
     if (bal) sp = Math.min(sp, 3.4);
     if (this.blocking) sp *= 0.5;
     if (this.attackT > 0) sp *= 0.45;
+    this.wet = this.onGround && Terrain.ready && groundH(this.pos.x, this.pos.z) < Terrain.water - 0.05;
+    if (this.wet) sp *= 0.6;
     let k = d.m > 0.05 ? 10 : 16;
     if (this.slideT > 0) { k = 1.6; d = { x: Math.sin(this.slideDir), z: Math.cos(this.slideDir), m: 1 }; sp = 2.0; }
     if (this.rollT > 0) k = 14;
@@ -188,7 +190,7 @@ const Player = {
     const hs = Math.hypot(this.vel.x, this.vel.z);
     if (this.onGround && hs > 0.8) {
       this.stepAcc += hs * dt;
-      if (this.stepAcc > (this.sprint ? 2.6 : 1.8)) { this.stepAcc = 0; if (!this.crouch) Sfx.step(this.surf()); }
+      if (this.stepAcc > (this.sprint ? 2.6 : 1.8)) { this.stepAcc = 0; if (!this.crouch) Sfx.step(this.surf()); if (this.wet) FX.burst(this.pos.x, this.pos.y + 0.3, this.pos.z, 5, 1.6, [0.7, 0.85, 1], 0.2, 0.5, 4, 1.4, 0.3); }
       this.dustT -= dt;
       if (this.dustT <= 0 && ((this.sprint && hs > 6.5) || this.slideT > 0) && !(this.groundBox && this.groundBox.rope)) {
         this.dustT = this.slideT > 0 ? 0.04 : 0.11;

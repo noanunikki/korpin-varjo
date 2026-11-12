@@ -115,6 +115,7 @@
     E – salamurha / synkronoi / piiloudu<br>
     Vasen hiiri – isku · Oikea hiiri (pidä) – torjunta<br>
     <b>Tab / I</b> – reppu, varusteet ja taidot · <b>R</b> – vaihda asetta<br>
+    <b>N</b> – koko kartta ja pikamatka<br>
     E arkulla – avaa · pudotukset poimitaan kävelemällä niiden päälle<br>
     Q (pidä) – Korpin katse · H – ohje · P – tauko · M – musiikki
   </div>
@@ -139,6 +140,10 @@
 <div class="screen inv" id="inv" style="display:none">
   <div class="invbox"><div class="invtabs"><span data-tab="gear">Varusteet</span><span data-tab="skills">Taidot</span><span class="closebtn">Sulje · Tab</span></div><div id="invbody"></div></div>
 </div>
+<div class="screen inv" id="fullmap" style="display:none">
+  <div class="invbox" style="width:min(780px,96vw);height:min(840px,96vh)"><div class="invtabs"><span class="on">Kartta</span><span style="opacity:.6;letter-spacing:1px;font-size:12px;text-transform:none">Klikkaa synkronoitua tornia pikamatkaa varten</span><span class="closebtn" id="fmclose">Sulje · N</span></div>
+  <div style="flex:1;display:flex;align-items:center;justify-content:center;overflow:auto"><canvas id="fmcanvas" style="width:min(720px,92vw);height:min(720px,92vw);max-height:76vh;max-width:76vh;cursor:pointer"></canvas></div></div>
+</div>
 <div class="screen" id="pause"><h1 style="font-size:44px">TAUKO</h1><h2>KLIKKAA JATKAAKSESI</h2><div class="go" id="resumebtn">JATKA</div></div>
 <div class="screen" id="end">
   <h1 style="font-size:52px">TEHTÄVÄ SUORITETTU</h1><h2 id="endsub">KAPTEENI ALDRIC ON KUOLLUT</h2>
@@ -149,6 +154,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="js/util.js"></script>
 <script src="js/world.js"></script>
+<script src="js/map.js"></script>
 <script src="js/characters.js"></script>
 <script src="js/player.js"></script>
 <script src="js/fx.js"></script>

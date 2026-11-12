@@ -196,6 +196,8 @@ const Sfx = {
     if (kind === 'wood') { this.tone(110, 0.08, 'triangle', 0.07, -40); this.noise(0.05, 0.06, 400); }
     else if (kind === 'roof') this.noise(0.06, 0.08, 800);
     else if (kind === 'hay') this.noise(0.1, 0.07, 3000, 'highpass');
+    else if (kind === 'grass') this.noise(0.09, 0.06, 900, 'bandpass');
+    else if (kind === 'water') this.noise(0.16, 0.1, 1400, 'bandpass');
     else this.noise(0.07, 0.10, 500);
   },
   climb() { this.noise(0.09, 0.07, 1500, 'bandpass'); },

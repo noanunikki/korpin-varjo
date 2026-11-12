@@ -48,7 +48,10 @@ class Batch {
 }
 
 // ---------- Törmäysmoottori ----------
+World.off = { x: 0, z: 0 };
+function groundH(x, z) { return Terrain.ready ? Terrain.h(x, z) : 0; }
 function addCol(x0, y0, z0, x1, y1, z1, props) {
+  const ox = World.off.x, oz = World.off.z; x0 += ox; x1 += ox; z0 += oz; z1 += oz;
   const c = Object.assign({ x0, y0, z0, x1, y1, z1, _q: 0 }, props || {});
   World.colliders.push(c);
   const C = World.CELL;
@@ -71,6 +74,7 @@ function query(x0, z0, x1, z1) {
 }
 function freeAt(e, x, y, z, h) {
   const r = e.r; h = h || e.h;
+  if (Terrain.ready && y < Terrain.h(x, z) - 0.3) return false;
   const list = query(x - r, z - r, x + r, z + r);
   for (const c of list) {
     if (c.oneWay) continue;
@@ -103,9 +107,19 @@ function stepAxis(e, axis, d) {
       }
     }
   }
-  if (axis === 1 && p.y < 0) {
-    e.landImpact = Math.max(e.landImpact || 0, -e.vel.y);
-    p.y = 0; e.onGround = true; e.groundBox = GROUND; e.vel.y = 0;
+  if (axis === 1) {
+    const gh = groundH(p.x, p.z);
+    if (p.y < gh) {
+      e.landImpact = Math.max(e.landImpact || 0, -e.vel.y);
+      p.y = gh; e.onGround = true; e.groundBox = GROUND; e.vel.y = 0;
+    }
+  } else if (Terrain.ready) {
+    // liian jyrkkä nousu = maasto on seinä
+    const gh = Terrain.h(p.x, p.z);
+    if (gh - p.y > 0.55) {
+      if (axis === 0) { p.x -= d; e.vel.x = 0; } else { p.z -= d; e.vel.z = 0; }
+      e.hitTerrain = true;
+    }
   }
 }
 const GROUND = { x0: -1e4, x1: 1e4, z0: -1e4, z1: 1e4, y0: -10, y1: 0, ground: true };
@@ -116,6 +130,11 @@ function moveEntity(e, dt) {
   const sdt = dt / steps;
   for (let s = 0; s < steps; s++) {
     stepAxis(e, 0, e.vel.x * sdt); stepAxis(e, 2, e.vel.z * sdt); stepAxis(e, 1, e.vel.y * sdt);
+  }
+  // rinnettä alas: pysy kiinni maassa
+  if (!e.onGround && e.stepH > 0 && e.vel.y <= 0.01 && Terrain.ready) {
+    const gh = Terrain.h(e.pos.x, e.pos.z);
+    if (e.pos.y - gh < 0.6 && e.pos.y >= gh - 0.01) { e.pos.y = gh; e.onGround = true; e.groundBox = GROUND; e.vel.y = 0; }
   }
 }
 
@@ -140,7 +159,18 @@ function rayDist(ox, oy, oz, dx, dy, dz, maxD, forCam) {
     }
     if (ok && t0 < best) best = t0;
   }
-  if (dy < 0 && oy > 0) { const t = -oy / dy; if (t < best) best = t; }
+  if (Terrain.ready) {
+    // maasto: kävele sädettä pitkin ja hae leikkauskohta
+    const steps = Math.ceil(best / 1.2);
+    for (let i = 1; i <= steps; i++) {
+      const t = Math.min(best, i * 1.2);
+      if (oy + dy * t < Terrain.h(ox + dx * t, oz + dz * t)) {
+        let lo = Math.max(0, t - 1.2), hi = t;
+        for (let k = 0; k < 6; k++) { const m = (lo + hi) / 2; if (oy + dy * m < Terrain.h(ox + dx * m, oz + dz * m)) hi = m; else lo = m; }
+        if (hi < best) best = hi; break;
+      }
+    }
+  } else if (dy < 0 && oy > 0) { const t = -oy / dy; if (t < best) best = t; }
   return best;
 }
 function los(ax, ay, az, bx, by, bz) {
@@ -151,12 +181,23 @@ function los(ax, ay, az, bx, by, bz) {
 
 // ---------- Navigointiruudukko + A* ----------
 const Nav = {
-  cs: 1.5, n: 144, ox: -108, oz: -108, blocked: null,
+  cs: 2.5, n: 264, ox: -330, oz: -330, blocked: null,
   build() {
     const n = this.n; this.blocked = new Uint8Array(n * n);
     this.gs = new Float32Array(n * n); this.came = new Int32Array(n * n); this.seen = new Uint32Array(n * n); this.closed = new Uint32Array(n * n); this.stamp = 0;
+    // maasto: vesi ja jyrkät rinteet estävät
+    if (Terrain.ready) {
+      for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+        const cx = this.ox + (i + 0.5) * this.cs, cz = this.oz + (j + 0.5) * this.cs;
+        const h = Terrain.h(cx, cz);
+        if (h < Terrain.water - 0.25 || Math.hypot(cx, cz) > 305) { this.blocked[j * n + i] = 1; continue; }
+        const dx = Terrain.h(cx + 1.2, cz) - Terrain.h(cx - 1.2, cz), dz = Terrain.h(cx, cz + 1.2) - Terrain.h(cx, cz - 1.2);
+        if (Math.hypot(dx, dz) / 2.4 > 0.62) this.blocked[j * n + i] = 1;
+      }
+    }
     for (const c of World.colliders) {
-      if (c.oneWay || c.y0 > 1.0 || c.y1 < 0.6 || c.noNav) continue;
+      const gh = groundH((c.x0 + c.x1) / 2, (c.z0 + c.z1) / 2);
+      if (c.oneWay || c.y0 > gh + 1.0 || c.y1 < gh + 0.6 || c.noNav) continue;
       const i0 = Math.floor((c.x0 - 0.45 - this.ox) / this.cs), i1 = Math.floor((c.x1 + 0.45 - this.ox) / this.cs);
       const j0 = Math.floor((c.z0 - 0.45 - this.oz) / this.cs), j1 = Math.floor((c.z1 + 0.45 - this.oz) / this.cs);
       for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
@@ -193,7 +234,7 @@ const Nav = {
     const closed = this.closed;
     const DX = [1, -1, 0, 0, 1, 1, -1, -1], DZ = [0, 0, 1, -1, 1, -1, 1, -1];
     let exp = 0, found = false;
-    while (hI.length && exp < 7000) {
+    while (hI.length && exp < 16000) {
       const cur = pop(); if (closed[cur] === st) continue; closed[cur] = st; exp++;
       if (cur === goal) { found = true; break; }
       const ci = cur % n, cj = (cur / n) | 0;
@@ -223,7 +264,7 @@ const WALL_COLS = [[1, 1, 1], [1, .86, .7], [.95, .8, .68], [.86, .92, .86], [1,
 const ROOF_COLS = [[1, 1, 1], [.78, .8, .9], [.9, .95, .75], [.95, .82, .7], [.7, .72, .78]];
 const WOOD_DARK = [0.62, 0.5, 0.42];
 
-function vb(name, x0, y0, z0, x1, y1, z1, col, uo, vo) { World.batches[name].box(x0, y0, z0, x1, y1, z1, col, uo || 0, vo || 0); }
+function vb(name, x0, y0, z0, x1, y1, z1, col, uo, vo) { const ox = World.off.x, oz = World.off.z; World.batches[name].box(x0 + ox, y0, z0 + oz, x1 + ox, y1, z1 + oz, col, uo || 0, vo || 0); }
 
 function makeCrate(x, y, z, s) {
   s = s || 0.9;
@@ -245,7 +286,7 @@ function makeHay(cx, cz, w, d, rot) {
   // pyörät
   vb('wood', cx - hw - .2, 0, cz - hd * .6, cx - hw - .05, 0.9, cz - hd * .6 + .35, [.45, .35, .28]);
   vb('wood', cx + hw + .05, 0, cz - hd * .6, cx + hw + .2, 0.9, cz - hd * .6 + .35, [.45, .35, .28]);
-  const c = addCol(cx - hw - .1, 0, cz - hd - .1, cx + hw + .1, 1.7, cz + hd + .1, { hay: true, noClimb: true, noLOS: false, cx, cz, prop: true });
+  const c = addCol(cx - hw - .1, 0, cz - hd - .1, cx + hw + .1, 1.7, cz + hd + .1, { hay: true, noClimb: true, noLOS: false, cx: cx + World.off.x, cz: cz + World.off.z, prop: true });
   World.hays.push(c);
   return c;
 }
@@ -447,7 +488,7 @@ function makeLeapTower(x0, z0, x1, z1, hBase, dir, name) {
   // heinäkärry alla
   const hx = ex + (dir === 'e' ? -0.0 : 0), hz = ez;
   makeHay(hx, hz, dir === 'e' || dir === 'w' ? 4.2 : 3.4, dir === 'e' || dir === 'w' ? 3.4 : 4.2);
-  World.perches.push({ name, x: ex, y: yT, z: ez, r: 1.6, cx, cz, yT, dir });
+  World.perches.push({ name, x: ex + World.off.x, y: yT, z: ez + World.off.z, r: 1.6, cx: cx + World.off.x, cz: cz + World.off.z, yT, dir });
   return { cx, cz, yT };
 }
 
@@ -638,16 +679,19 @@ function makeSafeHouse() {
 }
 
 World.trees = [];
-function genCity() {
-  _rng = mulberry32(777);
+function initBatches() {
   const B = World.batches;
   B.wall = new Batch(Tex.wall, 4); B.stone = new Batch(Tex.stone, 4); B.roof = new Batch(Tex.roof, 4);
   B.wood = new Batch(Tex.wood, 2); B.cloth = new Batch(Tex.cloth, 2); B.hay = new Batch(Tex.hay, 2); B.flat = new Batch(Tex.flat, 4);
+}
+// Kaupunki generoidaan kerran omiin koordinaatteihinsa; World.off siirtää sen paikoilleen.
+function genCityBody(seed) {
+  _rng = mulberry32(seed || 777);
   const state = { roofGuards: 0 };
+  const ox = World.off.x, oz = World.off.z;
   makeCityWalls();
   makeMarket();
   makeCathedral();
-  makeSafeHouse();
   for (let gx = -1; gx <= 1; gx++) for (let gz = -1; gz <= 1; gz++) {
     if ((gx === 0 && gz === 0) || (gx === 1 && gz === -1)) continue;
     genBlock(gx, gz, state);
@@ -659,15 +703,15 @@ function genCity() {
     const t = rand(-85, 85);
     const x = horiz ? t : line + rand(-3.5, 3.5), z = horiz ? line + rand(-3.5, 3.5) : t;
     if (Math.abs(x) < 24 && Math.abs(z) < 24) continue;
-    const f = World.colliders.some(c => c.bld && x > c.x0 - 1.5 && x < c.x1 + 1.5 && z > c.z0 - 1.5 && z < c.z1 + 1.5);
+    const f = World.colliders.some(c => c.bld && x + ox > c.x0 - 1.5 && x + ox < c.x1 + 1.5 && z + oz > c.z0 - 1.5 && z + oz < c.z1 + 1.5);
     if (f) continue;
     if (rng() < 0.4) { makeCrate(x, 0, z); makeCrate(x + .95, 0, z + .1, .8); if (rng() < .5) makeCrate(x + .3, .9, z, .7); }
     else if (rng() < 0.6) makeBarrel(x, 0, z);
     else makeHay(x, z, 3.2, 2.6);
   }
-  // lisää heinäkärryjä korkeiden rakennusten juurelle
+  // heinäkärryjä korkeiden rakennusten juurelle
   const tall = [];
-  for (const k in World.blockB) for (const b of World.blockB[k]) if (b.h >= 16 && !b.guardRoof) tall.push(b);
+  for (const k in World.blockB) for (const b of World.blockB[k]) if (!b._abs && b.h >= 16 && !b.guardRoof) tall.push(b);
   for (let i = 0; i < Math.min(4, tall.length); i++) {
     const b = tall[i];
     for (const s of ['n', 's', 'e', 'w']) if (b.edges[s]) {
@@ -677,19 +721,6 @@ function genCity() {
       makeHay(hx, hz, 3.4, 3.0); break;
     }
   }
-  // Sulat (kerättävät)
-  const feathers = [];
-  const per = World.perches[0]; // katedraali
-  feathers.push([per.cx + .0, per.yT + .9, per.cz + 1.6]);
-  feathers.push([45, 18.2, -57]);
-  feathers.push([0, 6.8, -16]);
-  feathers.push([95, 20, 95]);
-  const per2 = World.perches[1]; feathers.push([per2.cx + 1.2, per2.yT + .9, per2.cz]);
-  const sorted = tall.slice().sort((a, b) => b.h - a.h);
-  for (let i = 0; i < Math.min(6, sorted.length); i++) { const b = sorted[i]; feathers.push([(b.x0 + b.x1) / 2, b.h + .9 + (b.upper ? 0 : 0), (b.z0 + b.z1) / 2 + (b.upper ? (b.z1 - b.z0) / 2 - 1 : 0)]); }
-  if (World.ropes.length) { const r = World.ropes[Math.floor(World.ropes.length / 2)]; feathers.push([(r.x0 + r.x1) / 2, r.y1 + .9, (r.z0 + r.z1) / 2]); }
-  for (const f of feathers) World.feathers.push({ x: f[0], y: f[1], z: f[2], got: false });
-  Nav.build();
 }
 
 // ---------- Näkyvän maailman rakennus ----------

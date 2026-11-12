@@ -77,7 +77,7 @@ class Guard {
   constructor(sp, scene) {
     this.type = sp.type || 'sword'; this.roof = !!sp.roof; this.isTarget = this.type === 'captain' || !!sp.target;
     this.targetName = sp.target || (this.type === 'captain' ? 'Kapteeni Aldric' : null);
-    this.home = new V3(sp.x, sp.y || 0, sp.z); this.homeFace = sp.face !== undefined ? sp.face : rand(0, 6);
+    this.home = new V3(sp.x, sp.y !== undefined ? sp.y : groundH(sp.x, sp.z), sp.z); this.homeFace = sp.face !== undefined ? sp.face : rand(0, 6);
     this.pos = this.home.clone(); this.vel = new V3(); this.r = 0.32; this.h = 1.8;
     this.route = sp.route || null; this.ri = 0; this.wait = sp.wait || 2; this.waitT = 0; this.speedMul = sp.speed || 1;
     this.rig = makeHumanoid(sp.style || (this.type === 'archer' ? 'archer' : (this.isTarget ? 'captain' : 'guard')));
